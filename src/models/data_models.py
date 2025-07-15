@@ -55,7 +55,7 @@ class CandidateBasicInfo(BaseModel):
     email: Optional[str] = Field(None, description="邮箱")
     phone: Optional[str] = Field(None, description="电话")
     location: Optional[str] = Field(None, description="所在地")
-    experience_years: Optional[int] = Field(None, description="工作年限")
+    experience_years: Optional[float] = Field(None, description="工作年限")
     current_role: Optional[str] = Field(None, description="当前职位")
     current_company: Optional[str] = Field(None, description="当前公司")
 
@@ -80,7 +80,7 @@ class Skill(BaseModel):
     """技能信息"""
     name: str = Field(..., description="技能名称")
     level: Optional[SkillLevel] = Field(None, description="技能水平")
-    years_experience: Optional[int] = Field(None, description="使用年限")
+    years_experience: Optional[float] = Field(None, description="使用年限")
     description: Optional[str] = Field(None, description="技能描述")
 
 class CandidateProfile(BaseModel):
