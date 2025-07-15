@@ -65,22 +65,89 @@ class ReportGenerationNode:
         # 1. 报告头部信息
         report_parts.append(self._generate_header(job_requirement, len(evaluations)))
         
-        # 2. 基本信息表格
-        report_parts.append(self._generate_basic_info_table(evaluations))
+        # 2. 简化的候选人评估汇总表格
+        report_parts.append(self._generate_simplified_summary_table(evaluations, scoring_dimensions))
         
-        # 3. 各维度评分表格
-        for dimension in scoring_dimensions.dimensions:
-            table = self._generate_dimension_table(evaluations, dimension)
-            if table:
-                report_parts.append(table)
-        
-        # 4. 总体评分和排名
-        report_parts.append(self._generate_overall_ranking_table(evaluations))
-        
-        # 5. 推荐总结
+        # 3. 推荐总结
         report_parts.append(self._generate_recommendation_summary(evaluations))
         
         return "\n\n".join(report_parts)
+    
+    def _generate_simplified_summary_table(self, evaluations: List[CandidateEvaluation], scoring_dimensions: ScoringDimensions) -> str:
+        """生成简化的候选人评估汇总表格"""
+        if not evaluations:
+            return ""
+        
+        # 表头
+        header = "| 候选人 | 综合得分 | 技术能力 | 项目经验 | 团队管理 | 主要优势 | 主要不足 |"
+        separator = "|--------|----------|----------|----------|----------|----------|----------|"
+        
+        rows = []
+        
+        for eval in evaluations:
+            # 候选人名称（加粗排名前三）
+            if eval.ranking == 1:
+                candidate_name = f"**{eval.candidate_name}**"
+            else:
+                candidate_name = f"**{eval.candidate_name}**"
+            
+            # 综合得分（加粗）
+            overall_score = f"**{eval.overall_score:.1f}/10**"
+            
+            # 提取各维度得分
+            tech_score = self._extract_dimension_score(eval, ["技能匹配", "技术能力", "技术技能"])
+            project_score = self._extract_dimension_score(eval, ["经验评估", "项目经验", "工作经验"])
+            management_score = self._extract_dimension_score(eval, ["软技能", "团队管理", "管理能力"])
+            
+            # 主要优势（取前2个）
+            strengths = "，".join(eval.strengths[:2]) if eval.strengths else "基础技能"
+            
+            # 主要不足（取前1个）
+            weaknesses = eval.weaknesses[0] if eval.weaknesses else "待了解"
+            
+            row = f"| {candidate_name} | {overall_score} | {tech_score}/10 | {project_score}/10 | {management_score}/10 | {strengths} | {weaknesses} |"
+            rows.append(row)
+        
+        table = "\n".join([header, separator] + rows)
+        
+        # 添加推荐结果
+        recommendation_results = "\n\n**推荐结果：**\n"
+        for i, eval in enumerate(evaluations[:3]):  # 只显示前3名
+            if i == 0:
+                emoji = "🥇"
+                desc = "强烈推荐，最佳候选人"
+            elif i == 1:
+                emoji = "🥈"
+                desc = "推荐，次选候选人"
+            else:
+                emoji = "🥉"
+                desc = "可考虑，备选候选人"
+            
+            if eval.overall_score >= SCORE_THRESHOLDS["RECOMMENDED"]:
+                recommendation_results += f"{emoji} **{eval.candidate_name}** - {desc}\n"
+            elif eval.overall_score >= SCORE_THRESHOLDS["CONSIDER"]:
+                recommendation_results += f"⚠️ **{eval.candidate_name}** - 谨慎考虑，需进一步评估\n"
+            else:
+                recommendation_results += f"❌ **{eval.candidate_name}** - 不推荐，不符合要求\n"
+        
+        # 处理剩余候选人
+        for eval in evaluations[3:]:
+            if eval.overall_score >= SCORE_THRESHOLDS["RECOMMENDED"]:
+                recommendation_results += f"✅ **{eval.candidate_name}** - 推荐\n"
+            elif eval.overall_score >= SCORE_THRESHOLDS["CONSIDER"]:
+                recommendation_results += f"⚠️ **{eval.candidate_name}** - 谨慎考虑\n"
+            else:
+                recommendation_results += f"❌ **{eval.candidate_name}** - 不推荐\n"
+        
+        return f"## 候选人评估汇总\n\n{table}{recommendation_results}"
+    
+    def _extract_dimension_score(self, evaluation: CandidateEvaluation, dimension_names: List[str]) -> str:
+        """提取维度得分"""
+        for dimension_name in dimension_names:
+            for score in evaluation.dimension_scores:
+                if dimension_name in score.dimension_name:
+                    return f"{score.score:.1f}"
+        return "N/A"
     
     def _generate_header(self, job_requirement: JobRequirement, candidate_count: int) -> str:
         """生成报告头部"""
