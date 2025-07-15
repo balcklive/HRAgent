@@ -13,16 +13,16 @@ import json
 import re
 
 class RequirementConfirmationNode:
-    """需求确认节点 - 与HR交互确认招聘需求"""
+    """Requirement confirmation node - Interact with HR to confirm recruitment requirements"""
     
     def __init__(self, model_name: str = "gpt-4o-mini", temperature: float = 0.3):
         self.llm = ChatOpenAI(model=model_name, temperature=temperature, streaming=True)
         self.system_prompt = REQUIREMENT_CONFIRMATION_SYSTEM_PROMPT
         
     async def process_stream(self, state: RequirementConfirmationState, user_input: Optional[str] = None):
-        """流式处理需求确认"""
+        """Stream processing requirement confirmation"""
         try:
-            # 如果是第一次交互，基于JD生成初始问题
+            # If first interaction, generate initial question based on JD
             if not state.conversation_history and not user_input:
                 messages = [
                     SystemMessage(content=self.system_prompt),
@@ -106,14 +106,14 @@ class RequirementConfirmationNode:
         except Exception as e:
             yield {
                 "type": "error",
-                "content": f"处理过程中发生错误: {str(e)}",
+                "content": f"Error occurred during processing: {str(e)}",
                 "is_complete": False
             }
     
     def process(self, state: RequirementConfirmationState, user_input: Optional[str] = None) -> Dict[str, Any]:
-        """处理需求确认流程"""
+        """Process requirement confirmation flow"""
         try:
-            # 如果是第一次交互，基于JD生成初始问题
+            # If first interaction, generate initial question based on JD
             if not state.conversation_history and not user_input:
                 response = self._generate_initial_question(state.jd_text)
                 return self._update_state(state, "assistant", response)
@@ -158,12 +158,12 @@ class RequirementConfirmationNode:
         except Exception as e:
             return {
                 "status": "error",
-                "message": f"处理过程中发生错误: {str(e)}",
+                "message": f"Error occurred during processing: {str(e)}",
                 "is_complete": False
             }
     
     def _generate_initial_question(self, jd_text: str) -> str:
-        """基于JD生成初始问题"""
+        """Generate initial question based on JD"""
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=REQUIREMENT_CONFIRMATION_INITIAL_PROMPT_TEMPLATE.format(jd_text=jd_text))

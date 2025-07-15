@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>评估结果 - HR智能体简历筛选系统</title>
+    <title>Evaluation Results - HR AI Resume Screening System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', path='/css/style.css') }}" rel="stylesheet">
@@ -14,14 +14,14 @@
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
             <div class="container">
                 <a class="navbar-brand" href="/">
-                    <i class="fas fa-users"></i> HR智能体简历筛选系统
+                    <i class="fas fa-users"></i> HR AI Resume Screening System
                 </a>
                 <div class="navbar-nav ms-auto">
                     <a class="nav-link" href="/">
-                        <i class="fas fa-home"></i> 返回首页
+                        <i class="fas fa-home"></i> Back to Home
                     </a>
                     <a class="nav-link" href="/download/{{ task_id }}">
-                        <i class="fas fa-download"></i> 下载报告
+                        <i class="fas fa-download"></i> Download Report
                     </a>
                 </div>
             </div>
@@ -34,20 +34,20 @@
                     <div class="card shadow-lg">
                         <div class="card-header bg-success text-white">
                             <h3 class="mb-0">
-                                <i class="fas fa-check-circle"></i> 评估完成
+                                <i class="fas fa-check-circle"></i> Evaluation Completed
                             </h3>
                         </div>
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-6">
-                                    <p><strong>处理时间:</strong> {{ created_at }}</p>
-                                    <p><strong>任务ID:</strong> {{ task_id }}</p>
+                                    <p><strong>Processing Time:</strong> {{ created_at }}</p>
+                                    <p><strong>Task ID:</strong> {{ task_id }}</p>
                                 </div>
                                 <div class="col-md-6">
                                     {% if result.report_file %}
-                                    <p><strong>报告文件:</strong> {{ result.report_file }}</p>
+                                    <p><strong>Report File:</strong> {{ result.report_file }}</p>
                                     {% endif %}
-                                    <p><strong>状态:</strong> <span class="badge bg-success">处理完成</span></p>
+                                    <p><strong>Status:</strong> <span class="badge bg-success">Processing Completed</span></p>
                                 </div>
                             </div>
                         </div>
@@ -61,7 +61,7 @@
                     <div class="card shadow-lg">
                         <div class="card-header bg-info text-white">
                             <h4 class="mb-0">
-                                <i class="fas fa-chart-bar"></i> 评估结果
+                                <i class="fas fa-chart-bar"></i> Evaluation Results
                             </h4>
                         </div>
                         <div class="card-body">
@@ -72,7 +72,7 @@
                             {% else %}
                             <div class="alert alert-warning">
                                 <i class="fas fa-exclamation-triangle"></i> 
-                                评估结果暂不可用，请稍后再试。
+                                Evaluation results are temporarily unavailable, please try again later.
                             </div>
                             {% endif %}
                         </div>
@@ -84,10 +84,10 @@
             <div class="row mt-4">
                 <div class="col-12 text-center">
                     <a href="/" class="btn btn-primary btn-lg me-3">
-                        <i class="fas fa-plus"></i> 开始新的评估
+                        <i class="fas fa-plus"></i> Start New Evaluation
                     </a>
                     <a href="/download/{{ task_id }}" class="btn btn-success btn-lg">
-                        <i class="fas fa-download"></i> 下载完整报告
+                        <i class="fas fa-download"></i> Download Complete Report
                     </a>
                 </div>
             </div>

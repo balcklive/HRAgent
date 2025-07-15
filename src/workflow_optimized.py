@@ -110,7 +110,7 @@ class OptimizedHRAgentWorkflow:
         if progress_callback:
             await progress_callback({
                 "stage": "initialization",
-                "message": f"开始处理职位: {job_requirement.position}",
+                "message": f"Start processing position: {job_requirement.position}",
                 "progress": 0,
                 "total_items": len(resume_files),
                 "completed_items": 0
@@ -129,7 +129,7 @@ class OptimizedHRAgentWorkflow:
             if progress_callback:
                 await progress_callback({
                     "stage": "resume_processing",
-                    "message": "开始处理简历文件",
+                    "message": "Start processing resume files",
                     "progress": 10,
                     "total_items": len(existing_files),
                     "completed_items": 0
@@ -141,7 +141,7 @@ class OptimizedHRAgentWorkflow:
             if progress_callback:
                 await progress_callback({
                     "stage": "dimension_generation",
-                    "message": "生成评分维度",
+                    "message": "Generate scoring dimensions",
                     "progress": 40,
                     "total_items": 1,
                     "completed_items": 0
@@ -153,7 +153,7 @@ class OptimizedHRAgentWorkflow:
             if progress_callback:
                 await progress_callback({
                     "stage": "candidate_evaluation",
-                    "message": "开始候选人评估",
+                    "message": "Start candidate evaluation",
                     "progress": 60,
                     "total_items": len(candidate_profiles),
                     "completed_items": 0
@@ -167,7 +167,7 @@ class OptimizedHRAgentWorkflow:
             if progress_callback:
                 await progress_callback({
                     "stage": "report_generation",
-                    "message": "生成候选人评估报告",
+                    "message": "Generate candidate evaluation report",
                     "progress": 90,
                     "total_items": 1,
                     "completed_items": 0
@@ -181,7 +181,7 @@ class OptimizedHRAgentWorkflow:
             if progress_callback:
                 await progress_callback({
                     "stage": "complete",
-                    "message": "处理完成",
+                    "message": "Processing completed",
                     "progress": 100,
                     "total_items": len(resume_files),
                     "completed_items": len(resume_files)
@@ -460,7 +460,7 @@ class OptimizedHRAgentWorkflow:
         if progress_callback:
             await progress_callback({
                 "stage": "dimension_generation",
-                "message": "分析职位要求，生成评分维度",
+                "message": "Analyze job requirements, generate scoring dimensions",
                 "progress": 45,
                 "current_item": "评分维度"
             })
@@ -475,7 +475,7 @@ class OptimizedHRAgentWorkflow:
         if progress_callback:
             await progress_callback({
                 "stage": "dimension_generation",
-                "message": "评分维度生成完成",
+                "message": "Scoring dimensions generation completed",
                 "progress": 50,
                 "current_item": "评分维度"
             })

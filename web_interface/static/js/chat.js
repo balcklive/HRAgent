@@ -1,4 +1,4 @@
-// HR智能体聊天界面JavaScript
+// HR AI Chat Interface JavaScript
 
 class ChatBot {
     constructor() {
@@ -18,13 +18,13 @@ class ChatBot {
         this.uploadedFiles = [];
         this.currentEventSource = null;
         this.currentMessageBubble = null;
-        this.streamingEnabled = true; // 流式开关
+        this.streamingEnabled = true; // Streaming switch
         
         this.init();
     }
     
     init() {
-        // 事件监听
+        // Event listeners
         this.sendBtn.addEventListener('click', () => this.sendMessage());
         this.messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -37,10 +37,10 @@ class ChatBot {
         this.uploadBtn.addEventListener('click', () => this.uploadFiles());
         this.cancelUploadBtn.addEventListener('click', () => this.hideFileUpload());
         
-        // 自动调整文本框高度
+        // Auto-resize textarea
         this.messageInput.addEventListener('input', () => this.autoResizeTextarea());
         
-        // 开始会话
+        // Start session
         this.startSession();
     }
     
@@ -57,14 +57,14 @@ class ChatBot {
             this.sessionId = data.session_id;
             this.currentStep = data.step;
             
-            // 如果有初始消息，显示它
+            // If there's an initial message, display it
             if (data.message) {
                 this.addBotMessage(data.message);
             }
             
         } catch (error) {
-            console.error('启动会话失败:', error);
-            this.addBotMessage('抱歉，系统启动失败，请刷新页面重试。');
+            console.error('Failed to start session:', error);
+            this.addBotMessage('Sorry, system startup failed. Please refresh the page and try again.');
         }
     }
     
@@ -72,15 +72,15 @@ class ChatBot {
         const message = this.messageInput.value.trim();
         if (!message) return;
         
-        // 显示用户消息
+        // Display user message
         this.addUserMessage(message);
         this.messageInput.value = '';
         this.autoResizeTextarea();
         
-        // 禁用输入
+        // Disable input
         this.disableInput();
         
-        // 显示输入状态
+        // Show typing indicator
         this.showTypingIndicator();
         
         if (this.streamingEnabled) {
@@ -98,17 +98,17 @@ class ChatBot {
     
     async sendMessageStream(message) {
         try {
-            // 准备SSE请求
+            // Prepare SSE request
             const formData = new FormData();
             formData.append('session_id', this.sessionId);
             formData.append('message', message);
             formData.append('step', this.currentStep);
             
-            // 创建空的AI消息气泡
+            // Create empty AI message bubble
             this.hideTypingIndicator();
             this.currentMessageBubble = this.createEmptyBotMessage();
             
-            // 建立SSE连接
+            // Establish SSE connection
             const response = await fetch('/chat/message/stream', {
                 method: 'POST',
                 body: formData
@@ -118,7 +118,7 @@ class ChatBot {
                 throw new Error('Stream request failed');
             }
             
-            // 处理流式响应
+            // Handle streaming response
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -129,9 +129,9 @@ class ChatBot {
                 
                 buffer += decoder.decode(value, { stream: true });
                 
-                // 处理完整的SSE消息
+                // Process complete SSE messages
                 const lines = buffer.split('\n\n');
-                buffer = lines.pop(); // 保留不完整的部分
+                buffer = lines.pop(); // Keep incomplete part
                 
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
@@ -144,7 +144,7 @@ class ChatBot {
         } catch (error) {
             console.error('Stream failed:', error);
             this.hideTypingIndicator();
-            this.addBotMessage('❌ 抱歉，网络连接出现问题，请重试。');
+            this.addBotMessage('❌ Sorry, network connection issue. Please try again.');
             this.enableInput();
         }
     }
@@ -163,57 +163,57 @@ class ChatBot {
             
             const data = await response.json();
             
-            // 隐藏输入状态
+            // Hide typing indicator
             this.hideTypingIndicator();
             
             if (data.status === 'success') {
-                // 显示AI回复
+                // Display AI reply
                 this.addBotMessage(data.message);
                 
-                // 更新会话状态
+                // Update session state
                 this.currentStep = data.step;
                 
-                // 检查是否需要上传文件
+                // Check if file upload is needed
                 if (data.need_files) {
                     this.showFileUploadPrompt();
                 }
                 
-                // 检查是否完成
+                // Check if completed
                 if (data.completed) {
                     this.handleCompletion(data);
                 }
                 
-                // 如果是需求确认阶段，继续启用输入
+                // If in requirement confirmation stage, continue to enable input
                 if (this.currentStep === 'requirement_confirmation') {
                     this.enableInput();
                 } else if (this.currentStep === 'file_upload') {
-                    // 文件上传阶段禁用文本输入
+                    // Disable text input during file upload stage
                     this.disableInput();
                 }
                 
             } else {
-                this.addBotMessage('抱歉，处理您的消息时出现错误，请重试。');
+                this.addBotMessage('Sorry, an error occurred while processing your message. Please try again.');
             }
             
         } catch (error) {
-            console.error('发送消息失败:', error);
+            console.error('Failed to send message:', error);
             this.hideTypingIndicator();
-            this.addBotMessage('抱歉，网络连接出现问题，请重试。');
+            this.addBotMessage('Sorry, network connection issue. Please try again.');
             this.enableInput();
         }
     }
     
     async handleStreamChunk(data) {
         if (data.type === 'content') {
-            // 追加内容到当前消息
+            // Append content to current message
             this.appendToCurrentMessage(data.content);
             
         } else if (data.type === 'progress') {
-            // 处理进度更新
+            // Handle progress updates
             this.updateProgressUI(data);
             
         } else if (data.type === 'complete') {
-            // 完成状态处理
+            // Handle completion state
             this.currentStep = data.step || 'file_upload';
             this.finalizeCurrentMessage();
             this.hideProgressUI();
@@ -227,21 +227,21 @@ class ChatBot {
             }
             
         } else if (data.type === 'continue') {
-            // 继续对话
+            // Continue conversation
             this.currentStep = data.step || 'requirement_confirmation';
             this.finalizeCurrentMessage();
             this.enableInput();
             
         } else if (data.type === 'error') {
-            // 错误处理
+            // Error handling
             this.finalizeCurrentMessage();
             this.hideProgressUI();
             this.addBotMessage('❌ ' + data.message);
             this.enableInput();
             
         } else if (data.type === 'heartbeat') {
-            // 心跳消息，保持连接
-            // 不需要特别处理，只是保持连接活跃
+            // Heartbeat message, keep connection alive
+            // No special handling needed, just keep connection active
         }
     }
     
@@ -258,7 +258,7 @@ class ChatBot {
         
         const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
-        bubble.innerHTML = '<span class="cursor">▎</span>'; // 光标效果
+        bubble.innerHTML = '<span class="cursor">▎</span>'; // Cursor effect
         
         const time = document.createElement('div');
         time.className = 'message-time';
@@ -281,10 +281,10 @@ class ChatBot {
             const cursor = bubble.querySelector('.cursor');
             
             if (cursor) {
-                // 在光标前插入内容
+                // Insert content before cursor
                 cursor.insertAdjacentHTML('beforebegin', content);
             } else {
-                // 如果没有光标，直接追加
+                // If no cursor, append directly
                 bubble.innerHTML += content;
             }
             
@@ -298,10 +298,10 @@ class ChatBot {
             const cursor = bubble.querySelector('.cursor');
             
             if (cursor) {
-                cursor.remove(); // 移除光标
+                cursor.remove(); // Remove cursor
             }
             
-            // 处理Markdown格式
+            // Handle Markdown formatting
             bubble.innerHTML = this.convertMarkdownToHtml(bubble.innerHTML);
             
             this.currentMessageBubble = null;
@@ -328,9 +328,9 @@ class ChatBot {
         const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
         
-        // 处理消息内容（支持简单的HTML）
+        // Handle message content (supports simple HTML)
         if (typeof content === 'string') {
-            // 简单的Markdown支持
+            // Simple Markdown support
             content = content
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -400,14 +400,14 @@ class ChatBot {
     }
     
     showFileUploadPrompt() {
-        this.addBotMessage('现在请上传候选人的简历文件。您可以点击下方的 📎 按钮或直接拖拽文件到此处。');
+        this.addBotMessage('Now please upload candidate resume files. You can click the 📎 button below or drag files directly here.');
         this.showFileUpload();
     }
     
     async uploadFiles() {
         const files = this.resumeFiles.files;
         if (!files || files.length === 0) {
-            alert('请先选择要上传的文件');
+            alert('Please select files to upload first');
             return;
         }
         
@@ -420,12 +420,12 @@ class ChatBot {
         
         try {
             this.uploadBtn.disabled = true;
-            this.uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上传中...';
+            this.uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
             
-            this.addBotMessage(`📤 正在上传 ${files.length} 个文件...`);
+            this.addBotMessage(`📤 Uploading ${files.length} files...`);
             this.hideFileUpload();
             
-            // 使用流式上传端点
+            // Use streaming upload endpoint
             const response = await fetch('/chat/upload/stream', {
                 method: 'POST',
                 body: formData
@@ -435,9 +435,9 @@ class ChatBot {
                 throw new Error('Stream request failed');
             }
             
-            this.addBotMessage(`✅ 文件上传成功，开始处理...`);
+            this.addBotMessage(`✅ File upload successful, processing started...`);
             
-            // 处理流式响应
+            // Handle streaming response
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -448,9 +448,9 @@ class ChatBot {
                 
                 buffer += decoder.decode(value, { stream: true });
                 
-                // 处理完整的SSE消息
+                // Process complete SSE messages
                 const lines = buffer.split('\n\n');
-                buffer = lines.pop(); // 保留不完整的部分
+                buffer = lines.pop(); // Keep incomplete part
                 
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
@@ -467,46 +467,46 @@ class ChatBot {
         } catch (error) {
             console.error('Upload failed:', error);
             this.hideProgressUI();
-            this.addBotMessage('❌ 文件上传失败，请重试。');
+            this.addBotMessage('❌ File upload failed, please try again.');
         } finally {
             this.uploadBtn.disabled = false;
-            this.uploadBtn.innerHTML = '<i class="fas fa-upload"></i> 上传文件';
+            this.uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Files';
         }
     }
     
     async startProcessing(taskId) {
-        this.addBotMessage('🔄 正在处理您的简历，请稍等...');
-        this.statusBadge.textContent = '处理中';
+        this.addBotMessage('🔄 Processing your resumes, please wait...');
+        this.statusBadge.textContent = 'Processing';
         this.statusBadge.className = 'badge bg-warning ms-2';
         
-        // 轮询处理状态
+        // Poll processing status
         const pollStatus = async () => {
             try {
                 const response = await fetch(`/chat/status/${taskId}`);
                 const data = await response.json();
                 
                 if (data.status === 'completed') {
-                    this.addBotMessage('✅ 处理完成！正在生成评估报告...');
-                    this.statusBadge.textContent = '完成';
+                    this.addBotMessage('✅ Processing completed! Generating evaluation report...');
+                    this.statusBadge.textContent = 'Completed';
                     this.statusBadge.className = 'badge bg-success ms-2';
                     
-                    // 显示报告内容
+                    // Display report content
                     this.showReport(data.result);
                     
                 } else if (data.status === 'failed') {
-                    this.addBotMessage('❌ 处理失败: ' + data.error);
-                    this.statusBadge.textContent = '失败';
+                    this.addBotMessage('❌ Processing failed: ' + data.error);
+                    this.statusBadge.textContent = 'Failed';
                     this.statusBadge.className = 'badge bg-danger ms-2';
                     
                 } else {
-                    // 继续轮询
+                    // Continue polling
                     setTimeout(pollStatus, 2000);
                 }
                 
             } catch (error) {
-                console.error('检查状态失败:', error);
-                this.addBotMessage('❌ 状态检查失败，请刷新页面重试。');
-                this.statusBadge.textContent = '错误';
+                console.error('Status check failed:', error);
+                this.addBotMessage('❌ Status check failed, please refresh the page and try again.');
+                this.statusBadge.textContent = 'Error';
                 this.statusBadge.className = 'badge bg-danger ms-2';
             }
         };
@@ -516,7 +516,7 @@ class ChatBot {
     
     handleCompletion(data) {
         if (data.result_url) {
-            this.addBotMessage('🎉 简历筛选完成！正在跳转到结果页面...');
+            this.addBotMessage('🎉 Resume screening completed! Redirecting to results page...');
             setTimeout(() => {
                 window.location.href = data.result_url;
             }, 2000);
@@ -547,18 +547,18 @@ class ChatBot {
     }
     
     showReport(result) {
-        // 显示报告完成消息
-        this.addBotMessage('📊 评估报告已生成完成！以下是详细结果：');
+        // Display report completion message
+        this.addBotMessage('📊 Evaluation report generated successfully! Here are the detailed results:');
         
-        // 创建报告显示区域
+        // Create report display area
         const reportMessage = this.createReportMessage(result.report);
         this.chatMessages.appendChild(reportMessage);
         this.scrollToBottom();
         
-        // 禁用输入，处理完成
+        // Disable input, processing completed
         this.disableInput();
         
-        // 添加操作按钮
+        // Add action buttons
         this.addActionButtons(result);
     }
     
@@ -579,7 +579,7 @@ class ChatBot {
             <div class="card">
                 <div class="card-header bg-primary text-white">
                     <h6 class="mb-0">
-                        <i class="fas fa-file-alt"></i> 候选人评估报告
+                        <i class="fas fa-file-alt"></i> Candidate Evaluation Report
                     </h6>
                 </div>
                 <div class="card-body">
@@ -603,25 +603,25 @@ class ChatBot {
     }
     
     convertMarkdownToHtml(markdown) {
-        if (!markdown) return '<p>报告内容暂不可用</p>';
+        if (!markdown) return '<p>Report content is not available</p>';
         
-        // 简单的Markdown转HTML
+        // Simple Markdown to HTML conversion
         let html = markdown
-            // 标题处理
+            // Title processing
             .replace(/^### (.*$)/gm, '<h3>$1</h3>')
             .replace(/^## (.*$)/gm, '<h2>$1</h2>')
             .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-            // 粗体和斜体
+            // Bold and italic
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            // 换行处理
+            // Line break processing
             .replace(/\n\n/g, '</p><p>')
             .replace(/\n/g, '<br>');
         
-        // 处理表格
+        // Process tables
         html = this.convertMarkdownTable(html);
         
-        // 包装段落
+        // Wrap paragraphs
         if (!html.includes('<p>') && !html.includes('<h1>') && !html.includes('<h2>') && !html.includes('<h3>')) {
             html = '<p>' + html + '</p>';
         }
@@ -630,7 +630,7 @@ class ChatBot {
     }
     
     convertMarkdownTable(html) {
-        // 查找表格行
+        // Find table rows
         const tableRegex = /(\|[^|\n]*\|[^|\n]*\|[^\n]*\n)+/g;
         
         return html.replace(tableRegex, (match) => {
@@ -639,7 +639,7 @@ class ChatBot {
             
             let tableHtml = '<table class="table table-striped table-bordered table-sm">';
             
-            // 处理表头
+            // Process table header
             const headerRow = rows[0];
             const headers = headerRow.split('|').map(h => h.trim()).filter(h => h);
             
@@ -649,7 +649,7 @@ class ChatBot {
             });
             tableHtml += '</tr></thead>';
             
-            // 跳过分隔行，处理数据行
+            // Skip separator row, process data rows
             tableHtml += '<tbody>';
             for (let i = 2; i < rows.length; i++) {
                 const row = rows[i];
@@ -684,13 +684,13 @@ class ChatBot {
         actionButtons.innerHTML = `
             <div class="d-flex gap-2 flex-wrap">
                 <button class="btn btn-primary btn-sm" onclick="window.print()">
-                    <i class="fas fa-print"></i> 打印报告
+                    <i class="fas fa-print"></i> Print Report
                 </button>
                 <button class="btn btn-success btn-sm" onclick="this.downloadReport()">
-                    <i class="fas fa-download"></i> 下载报告
+                    <i class="fas fa-download"></i> Download Report
                 </button>
                 <button class="btn btn-info btn-sm" onclick="location.reload()">
-                    <i class="fas fa-refresh"></i> 重新开始
+                    <i class="fas fa-refresh"></i> Restart
                 </button>
             </div>
         `;
@@ -711,27 +711,27 @@ class ChatBot {
     updateProgressUI(progressData) {
         const { stage, message, progress, current_item, total_items, completed_items } = progressData;
         
-        // 创建或更新进度容器
+        // Create or update progress container
         let progressContainer = document.getElementById('progress-container');
         if (!progressContainer) {
             progressContainer = this.createProgressContainer();
         }
         
-        // 更新进度条
+        // Update progress bar
         const progressBar = progressContainer.querySelector('.progress-bar');
         const progressText = progressContainer.querySelector('.progress-text');
         const progressMessage = progressContainer.querySelector('.progress-message');
         const progressDetail = progressContainer.querySelector('.progress-detail');
         
-        // 更新进度条
+        // Update progress bar
         progressBar.style.width = `${progress}%`;
         progressBar.setAttribute('aria-valuenow', progress);
         
-        // 更新文本
+        // Update text
         progressText.textContent = `${Math.round(progress)}%`;
         progressMessage.textContent = message;
         
-        // 更新详细信息
+        // Update detailed information
         if (total_items && completed_items !== undefined) {
             progressDetail.textContent = `${completed_items}/${total_items}`;
             progressDetail.style.display = 'block';
@@ -742,7 +742,7 @@ class ChatBot {
             progressDetail.style.display = 'none';
         }
         
-        // 更新阶段样式
+        // Update stage styles
         this.updateStageIndicator(stage);
     }
 
@@ -753,26 +753,26 @@ class ChatBot {
         
         progressContainer.innerHTML = `
             <div class="progress-header">
-                <span class="progress-title">处理进度</span>
+                <span class="progress-title">Processing Progress</span>
                 <span class="progress-text">0%</span>
             </div>
             <div class="progress-bar-container">
                 <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
             <div class="progress-info">
-                <div class="progress-message">正在初始化...</div>
+                <div class="progress-message">Initializing...</div>
                 <div class="progress-detail" style="display: none;"></div>
             </div>
             <div class="progress-stages">
-                <div class="stage-indicator" data-stage="initialization">初始化</div>
-                <div class="stage-indicator" data-stage="resume_processing">简历处理</div>
-                <div class="stage-indicator" data-stage="dimension_generation">维度生成</div>
-                <div class="stage-indicator" data-stage="candidate_evaluation">候选人评估</div>
-                <div class="stage-indicator" data-stage="report_generation">报告生成</div>
+                <div class="stage-indicator" data-stage="initialization">Initialization</div>
+                <div class="stage-indicator" data-stage="resume_processing">Resume Processing</div>
+                <div class="stage-indicator" data-stage="dimension_generation">Dimension Generation</div>
+                <div class="stage-indicator" data-stage="candidate_evaluation">Candidate Evaluation</div>
+                <div class="stage-indicator" data-stage="report_generation">Report Generation</div>
             </div>
         `;
         
-        // 插入到聊天消息区域
+        // Insert into chat message area
         this.chatMessages.appendChild(progressContainer);
         this.scrollToBottom();
         
@@ -817,33 +817,33 @@ class ChatBot {
     }
 
     showEvaluationResult(result) {
-        // 隐藏进度UI
+        // Hide progress UI
         this.hideProgressUI();
         
-        // 显示结果摘要
+        // Display result summary
         const resultSummary = `
-            ✅ **处理完成**
+            ✅ **Processing Completed**
             
-            📊 **评估结果摘要**
-            - 候选人数量: ${result.evaluations ? result.evaluations.length : 0}
-            - 生成时间: ${new Date().toLocaleString()}
+            📊 **Evaluation Result Summary**
+            - Number of candidates: ${result.evaluations ? result.evaluations.length : 0}
+            - Generated at: ${new Date().toLocaleString()}
             
-            📝 以下是详细的评估报告：
+            📝 Here is the detailed evaluation report:
         `;
         
         this.addBotMessage(resultSummary);
         
-        // 直接显示报告内容，而不是显示按钮
+        // Display report content directly instead of showing buttons
         if (result.report) {
             this.showReportContent(result.report);
         }
         
-        // 添加操作按钮
+        // Add action buttons
         this.addDownloadButton(result);
     }
 
     showReportContent(reportContent) {
-        // 直接在聊天窗口中显示报告内容
+        // Display report content directly in chat window
         const reportMessage = this.createReportMessage(reportContent);
         this.chatMessages.appendChild(reportMessage);
         this.scrollToBottom();
@@ -866,22 +866,22 @@ class ChatBot {
         const buttonContainer = document.createElement('div');
         buttonContainer.className = 'd-flex gap-2 flex-wrap';
         
-        // 打印按钮
+        // Print button
         const printBtn = document.createElement('button');
         printBtn.className = 'btn btn-primary btn-sm';
-        printBtn.innerHTML = '<i class="fas fa-print"></i> 打印报告';
+        printBtn.innerHTML = '<i class="fas fa-print"></i> Print Report';
         printBtn.onclick = () => window.print();
         
-        // 下载按钮
+        // Download button
         const downloadBtn = document.createElement('button');
         downloadBtn.className = 'btn btn-success btn-sm';
-        downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载报告';
+        downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download Report';
         downloadBtn.onclick = () => this.downloadReportContent(result.report || '');
         
-        // 重新开始按钮
+        // Restart button
         const restartBtn = document.createElement('button');
         restartBtn.className = 'btn btn-info btn-sm';
-        restartBtn.innerHTML = '<i class="fas fa-refresh"></i> 重新开始';
+        restartBtn.innerHTML = '<i class="fas fa-refresh"></i> Restart';
         restartBtn.onclick = () => location.reload();
         
         buttonContainer.appendChild(printBtn);
@@ -904,11 +904,11 @@ class ChatBot {
 
     downloadReportContent(reportContent) {
         if (!reportContent) {
-            alert('报告内容不可用');
+            alert('Report content is not available');
             return;
         }
         
-        // 创建下载链接
+        // Create download link
         const blob = new Blob([reportContent], { type: 'text/markdown' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -921,7 +921,7 @@ class ChatBot {
     }
 }
 
-// 初始化聊天机器人
+// Initialize chatbot
 document.addEventListener('DOMContentLoaded', () => {
     new ChatBot();
 });

@@ -76,7 +76,7 @@ class CandidateEvaluationNode:
             if progress_callback:
                 await progress_callback({
                     "stage": "candidate_evaluation",
-                    "message": "开始候选人评估",
+                    "message": "Start candidate evaluation",
                     "progress": 60,
                     "total_items": len(candidates),
                     "completed_items": 0
@@ -88,7 +88,7 @@ class CandidateEvaluationNode:
             if progress_callback:
                 await progress_callback({
                     "stage": "candidate_evaluation",
-                    "message": f"找到 {len(valid_candidates)} 个有效候选人",
+                    "message": f"Found {len(valid_candidates)} valid candidates",
                     "progress": 65,
                     "total_items": len(valid_candidates),
                     "completed_items": 0
@@ -110,7 +110,7 @@ class CandidateEvaluationNode:
             if progress_callback:
                 await progress_callback({
                     "stage": "candidate_evaluation",
-                    "message": "生成评估结果",
+                    "message": "Generate evaluation results",
                     "progress": 85,
                     "total_items": len(evaluations),
                     "completed_items": len(evaluations)
@@ -121,7 +121,7 @@ class CandidateEvaluationNode:
             if progress_callback:
                 await progress_callback({
                     "stage": "candidate_evaluation",
-                    "message": "候选人评估完成",
+                    "message": "Candidate evaluation completed",
                     "progress": 90,
                     "total_items": len(candidates),
                     "completed_items": len(candidates)
@@ -410,7 +410,7 @@ class CandidateEvaluationNode:
                 if progress_callback:
                     await progress_callback({
                         "stage": "candidate_evaluation",
-                        "message": f"评估候选人: {candidate.basic_info.name}",
+                        "message": f"Evaluating candidate: {candidate.basic_info.name}",
                         "progress": 65 + (completed_count / len(candidates)) * 15,
                         "current_item": candidate.basic_info.name,
                         "total_items": len(candidates),
@@ -423,7 +423,7 @@ class CandidateEvaluationNode:
                 if progress_callback:
                     await progress_callback({
                         "stage": "candidate_evaluation",
-                        "message": f"完成评估: {candidate.basic_info.name} (得分: {result.overall_score:.1f})",
+                        "message": f"Completed evaluation: {candidate.basic_info.name} (Score: {result.overall_score:.1f})",
                         "progress": 65 + (completed_count / len(candidates)) * 15,
                         "current_item": candidate.basic_info.name,
                         "total_items": len(candidates),

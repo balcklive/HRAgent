@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HR智能体Web界面 - FastAPI应用
+HR AI Web Interface - FastAPI Application
 """
 import os
 import sys
@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 
-# 添加项目根目录到路径
+# Add project root directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.workflow_optimized import OptimizedHRAgentWorkflow
@@ -26,12 +26,12 @@ from src.nodes import RequirementConfirmationNode
 from src.models import RequirementConfirmationState
 
 app = FastAPI(
-    title="HR智能体简历筛选系统",
-    description="基于AI的智能简历筛选和评估系统",
+    title="HR AI Resume Screening System",
+    description="AI-based intelligent resume screening and evaluation system",
     version="1.0.0"
 )
 
-# 配置CORS
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,31 +40,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 静态文件和模板
+# Static files and templates
 app.mount("/static", StaticFiles(directory="web_interface/static"), name="static")
 templates = Jinja2Templates(directory="web_interface/templates")
 
-# 工作流实例
+# Workflow instance
 workflow = OptimizedHRAgentWorkflow()
 
-# 任务状态存储
+# Task status storage
 task_status = {}
 
-# 聊天会话存储
+# Chat session storage
 chat_sessions = {}
 
-# 流式会话存储
+# Streaming session storage
 streaming_sessions = {}
 
-# 需求确认节点
+# Requirement confirmation node
 requirement_node = RequirementConfirmationNode()
 
 def serialize_workflow_result(result: Dict[str, Any]) -> Dict[str, Any]:
-    """序列化工作流结果，避免JSON序列化错误"""
-    # 序列化复杂对象以避免JSON序列化错误
+    """Serialize workflow results to avoid JSON serialization errors"""
+    # Serialize complex objects to avoid JSON serialization errors
     evaluations = result.get("evaluations", [])
     if evaluations:
-        # 如果evaluations是对象列表，转换为字典列表
+        # If evaluations is a list of objects, convert to list of dictionaries
         if hasattr(evaluations[0], 'model_dump'):
             evaluations = [eval.model_dump() for eval in evaluations]
         elif hasattr(evaluations[0], 'dict'):
@@ -83,7 +83,7 @@ def serialize_workflow_result(result: Dict[str, Any]) -> Dict[str, Any]:
         scoring_dimensions = scoring_dimensions.dict()
     
     return {
-        "report": result.get("final_report", ""),  # 统一使用report字段
+        "report": result.get("final_report", ""),  # Unified use of report field
         "report_file": result.get("report_file", ""),
         "evaluations": evaluations,
         "job_requirement": job_requirement,
@@ -93,7 +93,7 @@ def serialize_workflow_result(result: Dict[str, Any]) -> Dict[str, Any]:
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    """主页面"""
+    """Main page"""
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/upload")
@@ -102,29 +102,29 @@ async def upload_files(
     jd_text: str = Form(...),
     resume_files: List[UploadFile] = File(...)
 ):
-    """处理文件上传和JD文本"""
+    """Handle file upload and JD text"""
     try:
-        # 验证输入
+        # Validate input
         if not jd_text.strip():
-            raise HTTPException(status_code=400, detail="JD文本不能为空")
+            raise HTTPException(status_code=400, detail="JD text cannot be empty")
         
         if not resume_files:
-            raise HTTPException(status_code=400, detail="请至少上传一个简历文件")
+            raise HTTPException(status_code=400, detail="Please upload at least one resume file")
         
-        # 生成任务ID
+        # Generate task ID
         task_id = str(uuid.uuid4())
         
-        # 初始化任务状态
+        # Initialize task status
         task_status[task_id] = {
             "status": "processing",
             "progress": 0,
-            "message": "开始处理...",
+            "message": "Starting processing...",
             "result": None,
             "error": None,
             "created_at": datetime.now().isoformat()
         }
         
-        # 保存上传的文件
+        # Save uploaded files
         upload_dir = Path("web_interface/static/uploads") / task_id
         upload_dir.mkdir(parents=True, exist_ok=True)
         
@@ -134,13 +134,13 @@ async def upload_files(
                 file_path = upload_dir / file.filename
                 content = await file.read()
                 
-                # 保存文件
+                # Save file
                 with open(file_path, "wb") as f:
                     f.write(content)
                 
                 saved_files.append(str(file_path))
         
-        # 在后台处理任务
+        # Process task in background
         background_tasks.add_task(
             process_evaluation_task,
             task_id,
@@ -150,7 +150,7 @@ async def upload_files(
         
         return JSONResponse({
             "task_id": task_id,
-            "message": "文件上传成功，开始处理",
+            "message": "File upload successful, processing started",
             "files_count": len(saved_files)
         })
         
@@ -158,20 +158,20 @@ async def upload_files(
         raise HTTPException(status_code=500, detail=str(e))
 
 async def process_evaluation_task(task_id: str, jd_text: str, resume_files: List[str]):
-    """后台处理评估任务"""
+    """Background processing of evaluation tasks"""
     try:
         # 更新状态
         task_status[task_id]["progress"] = 10
-        task_status[task_id]["message"] = "正在处理JD和简历文件..."
+        task_status[task_id]["message"] = "Processing JD and resume files..."
         
-        # 对于传统上传方式，使用自动需求确认
-        # 这里直接调用原始的工作流方法，让它自动提取需求
+        # For traditional upload, use automatic requirement confirmation
+        # Here directly call the original workflow method, let it automatically extract requirements
         result = await workflow.run_optimized_workflow(jd_text, resume_files)
         
         # 更新状态
         task_status[task_id]["progress"] = 100
         task_status[task_id]["status"] = "completed"
-        task_status[task_id]["message"] = "处理完成"
+        task_status[task_id]["message"] = "Processing completed"
         # 使用序列化函数避免JSON序列化错误
         task_status[task_id]["result"] = serialize_workflow_result(result)
         
@@ -191,26 +191,26 @@ async def process_evaluation_task(task_id: str, jd_text: str, resume_files: List
 
 @app.get("/status/{task_id}")
 async def get_task_status(task_id: str):
-    """获取任务状态"""
+    """Get task status"""
     if task_id not in task_status:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise HTTPException(status_code=404, detail="Task not found")
     
     return JSONResponse(task_status[task_id])
 
 @app.get("/result/{task_id}")
 async def get_result(request: Request, task_id: str):
-    """获取处理结果页面"""
+    """Get processing result page"""
     if task_id not in task_status:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise HTTPException(status_code=404, detail="Task not found")
     
     task = task_status[task_id]
     
     if task["status"] != "completed":
-        raise HTTPException(status_code=400, detail="任务尚未完成")
+        raise HTTPException(status_code=400, detail="Task not yet completed")
     
     result = task["result"]
     
-    # 准备模板数据
+    # Prepare template data
     template_data = {
         "request": request,
         "task_id": task_id,
@@ -222,16 +222,16 @@ async def get_result(request: Request, task_id: str):
 
 @app.get("/download/{task_id}")
 async def download_report(task_id: str):
-    """下载评估报告"""
+    """Download evaluation report"""
     if task_id not in task_status:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise HTTPException(status_code=404, detail="Task not found")
     
     task = task_status[task_id]
     
     if task["status"] != "completed":
-        raise HTTPException(status_code=400, detail="任务尚未完成")
+        raise HTTPException(status_code=400, detail="Task not yet completed")
     
-    # 返回报告文件内容
+    # Return report file content
     result = task["result"]
     report_content = result.get("report", "")
     
@@ -245,11 +245,11 @@ async def download_report(task_id: str):
 
 @app.post("/chat/start")
 async def start_chat_session():
-    """开始聊天会话"""
+    """Start chat session"""
     try:
         session_id = str(uuid.uuid4())
         
-        # 初始化会话状态
+        # Initialize session state
         chat_sessions[session_id] = {
             "session_id": session_id,
             "step": "jd_input",
@@ -263,7 +263,7 @@ async def start_chat_session():
         return JSONResponse({
             "session_id": session_id,
             "step": "jd_input",
-            "message": "您好！我是HR智能助手。请告诉我您要招聘的职位信息，包括职位名称、技能要求、工作经验等。您也可以直接粘贴完整的JD内容。"
+            "message": "Hello! I'm your HR AI Assistant. Please tell me about the position you're recruiting for, including job title, skill requirements, work experience, etc. You can also paste the complete JD content directly."
         })
         
     except Exception as e:
@@ -275,14 +275,14 @@ async def process_chat_message_stream(
     message: str = Form(...),
     step: str = Form(...)
 ):
-    """流式处理聊天消息"""
+    """Process chat messages with streaming"""
     try:
         if session_id not in chat_sessions:
-            raise HTTPException(status_code=404, detail="会话不存在")
+            raise HTTPException(status_code=404, detail="Session not found")
         
         session = chat_sessions[session_id]
         
-        # 保存用户消息
+        # Save user message
         session["messages"].append({
             "role": "user",
             "content": message,
@@ -291,38 +291,38 @@ async def process_chat_message_stream(
         
         async def generate():
             if step == "jd_input":
-                # 创建需求确认状态
+                # Create requirement confirmation state
                 requirement_state = RequirementConfirmationState(jd_text=message)
                 session["requirement_state"] = requirement_state.model_dump()
                 session["jd_text"] = message
                 
-                # 流式处理
+                # Stream processing
                 requirement_node = session["requirement_node"]
                 async for chunk in requirement_node.process_stream(requirement_state):
-                    # 更新session状态
+                    # Update session state
                     session["requirement_state"] = requirement_state.model_dump()
                     
-                    # 添加步骤信息
+                    # Add step information
                     if chunk.get("type") == "continue":
                         chunk["step"] = "requirement_confirmation"
                     elif chunk.get("type") == "complete":
                         chunk["step"] = "file_upload"
                         chunk["need_files"] = True
                     
-                    # 发送SSE数据
+                    # Send SSE data
                     yield f"data: {json.dumps(chunk)}\n\n"
                     
             elif step == "requirement_confirmation":
-                # 继续需求确认对话
+                # Continue requirement confirmation dialogue
                 requirement_state_dict = session["requirement_state"]
                 requirement_state = RequirementConfirmationState(**requirement_state_dict)
                 requirement_node = session["requirement_node"]
                 
                 async for chunk in requirement_node.process_stream(requirement_state, message):
-                    # 更新session状态
+                    # Update session state
                     session["requirement_state"] = requirement_state.model_dump()
                     
-                    # 检查是否完成
+                    # Check if completed
                     if chunk.get("is_complete", False):
                         session["job_requirement"] = chunk["job_requirement"]
                         chunk["step"] = "file_upload"
@@ -352,14 +352,14 @@ async def process_chat_message(
     message: str = Form(...),
     step: str = Form(...)
 ):
-    """处理聊天消息（备用）"""
+    """Process chat messages (fallback)"""
     try:
         if session_id not in chat_sessions:
-            raise HTTPException(status_code=404, detail="会话不存在")
+            raise HTTPException(status_code=404, detail="Session not found")
         
         session = chat_sessions[session_id]
         
-        # 保存用户消息
+        # Save user message
         session["messages"].append({
             "role": "user",
             "content": message,
@@ -462,17 +462,17 @@ async def upload_chat_files(
     session_id: str = Form(...),
     files: List[UploadFile] = File(...)
 ):
-    """处理聊天中的文件上传"""
+    """Handle file uploads in chat"""
     try:
         if session_id not in chat_sessions:
-            raise HTTPException(status_code=404, detail="会话不存在")
+            raise HTTPException(status_code=404, detail="Session not found")
         
         session = chat_sessions[session_id]
         
-        # 生成任务ID
+        # Generate task ID
         task_id = str(uuid.uuid4())
         
-        # 保存上传的文件
+        # Save uploaded files
         upload_dir = Path("web_interface/static/uploads") / task_id
         upload_dir.mkdir(parents=True, exist_ok=True)
         
@@ -487,17 +487,17 @@ async def upload_chat_files(
                 
                 saved_files.append(str(file_path))
         
-        # 初始化任务状态
+        # Initialize task status
         task_status[task_id] = {
             "status": "processing",
             "progress": 0,
-            "message": "开始处理...",
+            "message": "Starting processing...",
             "result": None,
             "error": None,
             "created_at": datetime.now().isoformat()
         }
         
-        # 在后台处理任务
+        # Process task in background
         asyncio.create_task(
             process_chat_evaluation_task(task_id, session_id, saved_files)
         )
@@ -517,17 +517,17 @@ async def upload_chat_files_stream(
     session_id: str = Form(...),
     files: List[UploadFile] = File(...)
 ):
-    """处理聊天中的文件上传（流式版本）"""
+    """Handle file uploads in chat (streaming version)"""
     try:
         if session_id not in chat_sessions:
-            raise HTTPException(status_code=404, detail="会话不存在")
+            raise HTTPException(status_code=404, detail="Session not found")
         
         session = chat_sessions[session_id]
         
-        # 生成任务ID
+        # Generate task ID
         task_id = str(uuid.uuid4())
         
-        # 保存上传的文件
+        # Save uploaded files
         upload_dir = Path("web_interface/static/uploads") / task_id
         upload_dir.mkdir(parents=True, exist_ok=True)
         
@@ -556,14 +556,14 @@ async def upload_chat_files_stream(
                 # 获取作业需求
                 job_requirement_dict = session.get("job_requirement")
                 if not job_requirement_dict:
-                    yield f"data: {json.dumps({'type': 'error', 'message': '未找到职位需求信息'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Job requirement information not found'})}\n\n"
                     return
                 
                 # 将字典转换为JobRequirement对象
                 try:
                     job_requirement = JobRequirement(**job_requirement_dict)
                 except Exception as e:
-                    yield f"data: {json.dumps({'type': 'error', 'message': f'职位需求数据格式错误: {str(e)}'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'error', 'message': f'Job requirement data format error: {str(e)}'})}\n\n"
                     return
                 
                 # 创建工作流实例
@@ -628,19 +628,19 @@ async def upload_chat_files_stream(
         raise HTTPException(status_code=500, detail=str(e))
 
 async def process_chat_evaluation_task(task_id: str, session_id: str, resume_files: List[str]):
-    """处理聊天中的评估任务"""
+    """Process evaluation tasks in chat"""
     try:
         # 更新状态
         task_status[task_id]["progress"] = 10
-        task_status[task_id]["message"] = "正在处理JD和简历文件..."
+        task_status[task_id]["message"] = "Processing JD and resume files..."
         
         # 获取已确认的JobRequirement（从指定会话中获取）
         if session_id not in chat_sessions:
-            raise ValueError("会话不存在")
+            raise ValueError("Session not found")
             
         session = chat_sessions[session_id]
         if not session.get("job_requirement"):
-            raise ValueError("未找到已确认的招聘需求，请重新开始聊天流程")
+            raise ValueError("Confirmed job requirements not found, please restart the chat process")
         
         from src.models import JobRequirement
         job_req_dict = session["job_requirement"]
@@ -652,7 +652,7 @@ async def process_chat_evaluation_task(task_id: str, session_id: str, resume_fil
         # 更新状态
         task_status[task_id]["progress"] = 100
         task_status[task_id]["status"] = "completed"
-        task_status[task_id]["message"] = "处理完成"
+        task_status[task_id]["message"] = "Processing completed"
         # 使用序列化函数避免JSON序列化错误
         task_status[task_id]["result"] = serialize_workflow_result(result)
         
@@ -672,19 +672,19 @@ async def process_chat_evaluation_task(task_id: str, session_id: str, resume_fil
 
 @app.get("/chat/status/{task_id}")
 async def get_chat_task_status(task_id: str):
-    """获取聊天任务状态"""
+    """Get chat task status"""
     if task_id not in task_status:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise HTTPException(status_code=404, detail="Task not found")
     
     return JSONResponse(task_status[task_id])
 
 @app.get("/health")
 async def health_check():
-    """健康检查"""
+    """Health check"""
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 HR智能体Web界面启动成功")
-    print("📝 访问 http://localhost:8000 开始使用")
+    print("🚀 HR AI Web Interface started successfully")
+    print("📝 Visit http://localhost:8000 to start using")
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

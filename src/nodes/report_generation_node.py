@@ -20,7 +20,7 @@ import re
 from datetime import datetime
 
 class ReportGenerationNode:
-    """报告生成节点 - 将评分结果转换为Markdown格式表格"""
+    """Report generation node - Convert evaluation results to Markdown format tables"""
     
     def __init__(self):
         pass
@@ -29,16 +29,16 @@ class ReportGenerationNode:
                 evaluations: List[CandidateEvaluation],
                 job_requirement: JobRequirement,
                 scoring_dimensions: ScoringDimensions) -> Dict[str, Any]:
-        """处理报告生成"""
+        """Process report generation"""
         try:
             if not evaluations:
                 return {
                     "status": "error",
-                    "error": "没有候选人评价数据",
+                    "error": "No candidate evaluation data",
                     "report": ""
                 }
             
-            # 生成报告
+            # Generate report
             report = self._generate_markdown_report(evaluations, job_requirement, scoring_dimensions)
             
             return {
@@ -60,12 +60,12 @@ class ReportGenerationNode:
                             job_requirement: JobRequirement,
                             scoring_dimensions: ScoringDimensions,
                             progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
-        """处理报告生成（带进度流式输出）"""
+        """Process report generation（带进度流式输出）"""
         try:
             if progress_callback:
                 await progress_callback({
                     "stage": "report_generation",
-                    "message": "开始生成候选人评估报告",
+                    "message": "Starting to generate candidate evaluation report",
                     "progress": 90,
                     "total_items": 1,
                     "completed_items": 0
@@ -74,28 +74,28 @@ class ReportGenerationNode:
             if not evaluations:
                 return {
                     "status": "error",
-                    "error": "没有候选人评价数据",
+                    "error": "No candidate evaluation data",
                     "report": ""
                 }
             
             if progress_callback:
                 await progress_callback({
                     "stage": "report_generation",
-                    "message": "分析候选人数据",
+                    "message": "Analyzing candidate data",
                     "progress": 92,
-                    "current_item": "数据分析"
+                    "current_item": "Data analysis"
                 })
             
-            # 生成报告（在线程池中执行以避免阻塞）
+            # Generate report（在线程池中执行以避免阻塞）
             import asyncio
             loop = asyncio.get_event_loop()
             
             if progress_callback:
                 await progress_callback({
                     "stage": "report_generation",
-                    "message": "生成Markdown报告",
+                    "message": "Generating Markdown report",
                     "progress": 95,
-                    "current_item": "报告生成"
+                    "current_item": "Report generation"
                 })
             
             report = await loop.run_in_executor(
@@ -109,9 +109,9 @@ class ReportGenerationNode:
             if progress_callback:
                 await progress_callback({
                     "stage": "report_generation",
-                    "message": "报告生成完成",
+                    "message": "Report generation completed",
                     "progress": 98,
-                    "current_item": "报告完成"
+                    "current_item": "Report completed"
                 })
             
             return {
@@ -125,7 +125,7 @@ class ReportGenerationNode:
             if progress_callback:
                 await progress_callback({
                     "stage": "report_generation",
-                    "message": f"报告生成失败: {str(e)}",
+                    "message": f"Report generation failed: {str(e)}",
                     "progress": 90,
                     "error": str(e)
                 })
@@ -140,90 +140,90 @@ class ReportGenerationNode:
                                 evaluations: List[CandidateEvaluation],
                                 job_requirement: JobRequirement,
                                 scoring_dimensions: ScoringDimensions) -> str:
-        """生成Markdown格式报告"""
+        """Generate Markdown format report"""
         report_parts = []
         
-        # 1. 报告头部信息
+        # 1. Report header information
         report_parts.append(self._generate_header(job_requirement, len(evaluations)))
         
-        # 2. 简化的候选人评估汇总表格
+        # 2. Simplified candidate evaluation summary table
         report_parts.append(self._generate_simplified_summary_table(evaluations, scoring_dimensions))
         
-        # 3. 推荐总结
+        # 3. Recommendation summary
         report_parts.append(self._generate_recommendation_summary(evaluations))
         
         return "\n\n".join(report_parts)
     
     def _generate_simplified_summary_table(self, evaluations: List[CandidateEvaluation], scoring_dimensions: ScoringDimensions) -> str:
-        """生成简化的候选人评估汇总表格"""
+        """Generate simplified candidate evaluation summary table"""
         if not evaluations:
             return ""
         
-        # 表头
-        header = "| 候选人 | 综合得分 | 技术能力 | 项目经验 | 团队管理 | 主要优势 | 主要不足 |"
+        # Table header
+        header = "| Candidate | Overall Score | Technical Skills | Project Experience | Team Management | Key Strengths | Key Weaknesses |"
         separator = "|--------|----------|----------|----------|----------|----------|----------|"
         
         rows = []
         
         for eval in evaluations:
-            # 候选人名称（加粗排名前三）
+            # Candidate name (bold for top 3)
             if eval.ranking == 1:
                 candidate_name = f"**{eval.candidate_name}**"
             else:
                 candidate_name = f"**{eval.candidate_name}**"
             
-            # 综合得分（加粗）
+            # Overall score (bold)
             overall_score = f"**{eval.overall_score:.1f}/10**"
             
-            # 提取各维度得分
+            # Extract dimension scores
             tech_score = self._extract_dimension_score(eval, ["技能匹配", "技术能力", "技术技能"])
             project_score = self._extract_dimension_score(eval, ["经验评估", "项目经验", "工作经验"])
             management_score = self._extract_dimension_score(eval, ["软技能", "团队管理", "管理能力"])
             
-            # 主要优势（取前2个）
-            strengths = "，".join(eval.strengths[:2]) if eval.strengths else "基础技能"
+            # Key strengths (top 2)
+            strengths = "，".join(eval.strengths[:2]) if eval.strengths else "Basic skills"
             
-            # 主要不足（取前1个）
-            weaknesses = eval.weaknesses[0] if eval.weaknesses else "待了解"
+            # Key weaknesses (top 1)
+            weaknesses = eval.weaknesses[0] if eval.weaknesses else "To be understood"
             
             row = f"| {candidate_name} | {overall_score} | {tech_score}/10 | {project_score}/10 | {management_score}/10 | {strengths} | {weaknesses} |"
             rows.append(row)
         
         table = "\n".join([header, separator] + rows)
         
-        # 添加推荐结果
-        recommendation_results = "\n\n**推荐结果：**\n"
-        for i, eval in enumerate(evaluations[:3]):  # 只显示前3名
+        # Add recommendation results
+        recommendation_results = "\n\n**Recommendation Results:**\n"
+        for i, eval in enumerate(evaluations[:3]):  # Only show top 3
             if i == 0:
                 emoji = "🥇"
-                desc = "强烈推荐，最佳候选人"
+                desc = "Strongly recommended, best candidate"
             elif i == 1:
                 emoji = "🥈"
-                desc = "推荐，次选候选人"
+                desc = "Recommended, second choice candidate"
             else:
                 emoji = "🥉"
-                desc = "可考虑，备选候选人"
+                desc = "Consider, alternative candidate"
             
             if eval.overall_score >= SCORE_THRESHOLDS["RECOMMENDED"]:
                 recommendation_results += f"{emoji} **{eval.candidate_name}** - {desc}\n"
             elif eval.overall_score >= SCORE_THRESHOLDS["CONSIDER"]:
-                recommendation_results += f"⚠️ **{eval.candidate_name}** - 谨慎考虑，需进一步评估\n"
+                recommendation_results += f"⚠️ **{eval.candidate_name}** - Consider with caution, needs further evaluation\n"
             else:
-                recommendation_results += f"❌ **{eval.candidate_name}** - 不推荐，不符合要求\n"
+                recommendation_results += f"❌ **{eval.candidate_name}** - Not recommended, does not meet requirements\n"
         
-        # 处理剩余候选人
+        # Handle remaining candidates
         for eval in evaluations[3:]:
             if eval.overall_score >= SCORE_THRESHOLDS["RECOMMENDED"]:
-                recommendation_results += f"✅ **{eval.candidate_name}** - 推荐\n"
+                recommendation_results += f"✅ **{eval.candidate_name}** - Recommended\n"
             elif eval.overall_score >= SCORE_THRESHOLDS["CONSIDER"]:
-                recommendation_results += f"⚠️ **{eval.candidate_name}** - 谨慎考虑\n"
+                recommendation_results += f"⚠️ **{eval.candidate_name}** - Consider with caution\n"
             else:
-                recommendation_results += f"❌ **{eval.candidate_name}** - 不推荐\n"
+                recommendation_results += f"❌ **{eval.candidate_name}** - Not recommended\n"
         
-        return f"## 候选人评估汇总\n\n{table}{recommendation_results}"
+        return f"## Candidate Evaluation Summary\n\n{table}{recommendation_results}"
     
     def _extract_dimension_score(self, evaluation: CandidateEvaluation, dimension_names: List[str]) -> str:
-        """提取维度得分"""
+        """Extract dimension score"""
         for dimension_name in dimension_names:
             for score in evaluation.dimension_scores:
                 if dimension_name in score.dimension_name:
@@ -231,7 +231,7 @@ class ReportGenerationNode:
         return "N/A"
     
     def _generate_header(self, job_requirement: JobRequirement, candidate_count: int) -> str:
-        """生成报告头部"""
+        """Generate report header"""
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         must_have_formatted = self._format_requirement_list(job_requirement.must_have)
@@ -248,9 +248,9 @@ class ReportGenerationNode:
         )
     
     def _format_requirement_list(self, requirements: List[str]) -> str:
-        """格式化需求列表"""
+        """Format requirement list"""
         if not requirements:
-            return "- 无"
+            return "- None"
         return "\n".join(f"- {req}" for req in requirements)
     
     def _generate_basic_info_table(self, evaluations: List[CandidateEvaluation]) -> str:
@@ -258,7 +258,7 @@ class ReportGenerationNode:
         if not evaluations:
             return ""
         
-        # 表头
+        # Table header
         candidates = [f"**{eval.candidate_name}**" for eval in evaluations]
         header = "| **Basic Info** | " + " | ".join(candidates) + " |"
         separator = "|" + "|".join(["---"] * (len(candidates) + 1)) + "|"
@@ -273,7 +273,7 @@ class ReportGenerationNode:
         scores = [f"{eval.overall_score:.1f}/10" for eval in evaluations]
         rows.append("| **Overall Score** | " + " | ".join(scores) + " |")
         
-        # 推荐状态行
+        # Recommended状态行
         recommendations = []
         for eval in evaluations:
             if eval.overall_score >= SCORE_THRESHOLDS["RECOMMENDED"]:
@@ -317,7 +317,7 @@ class ReportGenerationNode:
         if not any(score for score in dimension_scores):
             return ""
         
-        # 表头
+        # Table header
         candidates = [f"**{eval.candidate_name}**" for eval in evaluations]
         header = f"| **{dimension.name}** | " + " | ".join(candidates) + " |"
         separator = "|" + "|".join(["---"] * (len(candidates) + 1)) + " |"
@@ -361,13 +361,13 @@ class ReportGenerationNode:
         if not evaluations:
             return ""
         
-        # 表头
+        # Table header
         header = "| **Rank** | **Candidate** | **Score** | **Status** | **Strengths** | **Weaknesses** |"
         separator = "|" + "|".join(["---"] * 6) + "|"
         
         rows = []
         for eval in evaluations:
-            # 推荐状态
+            # Recommended状态
             if eval.overall_score >= SCORE_THRESHOLDS["RECOMMENDED"]:
                 status = RECOMMENDATION_STATUS["RECOMMENDED"]
             elif eval.overall_score >= SCORE_THRESHOLDS["CONSIDER"]:
@@ -386,47 +386,47 @@ class ReportGenerationNode:
         return OVERALL_RANKING_TEMPLATE.format(table_content=table)
     
     def _generate_recommendation_summary(self, evaluations: List[CandidateEvaluation]) -> str:
-        """生成推荐总结"""
+        """生成Recommended总结"""
         if not evaluations:
             return ""
         
-        # 统计推荐情况
+        # 统计Recommended情况
         recommended = [e for e in evaluations if e.overall_score >= SCORE_THRESHOLDS["RECOMMENDED"]]
         consider = [e for e in evaluations if SCORE_THRESHOLDS["CONSIDER"] <= e.overall_score < SCORE_THRESHOLDS["RECOMMENDED"]]
         not_recommended = [e for e in evaluations if e.overall_score < SCORE_THRESHOLDS["CONSIDER"]]
         
         summary_parts = []
-        summary_parts.append(f"**评估总结：**")
-        summary_parts.append(f"- 总候选人：{len(evaluations)} 人")
-        summary_parts.append(f"- 推荐：{len(recommended)} 人")
-        summary_parts.append(f"- 考虑：{len(consider)} 人")
-        summary_parts.append(f"- 不推荐：{len(not_recommended)} 人")
+        summary_parts.append(f"**Evaluation Summary:**")
+        summary_parts.append(f"- Total candidates: {len(evaluations)} people")
+        summary_parts.append(f"- Recommended: {len(recommended)} people")
+        summary_parts.append(f"- Consider: {len(consider)} people")
+        summary_parts.append(f"- Not recommended: {len(not_recommended)} people")
         summary_parts.append("")
         
         if recommended:
-            summary_parts.append("**推荐候选人：**")
+            summary_parts.append("**Recommended candidates:**")
             for eval in recommended:
-                summary_parts.append(f"- {eval.candidate_name} (得分: {eval.overall_score:.1f})")
+                summary_parts.append(f"- {eval.candidate_name} (Score:  {eval.overall_score:.1f})")
             summary_parts.append("")
         
         if consider:
-            summary_parts.append("**可考虑候选人：**")
+            summary_parts.append("**Consider candidates:**")
             for eval in consider:
-                summary_parts.append(f"- {eval.candidate_name} (得分: {eval.overall_score:.1f})")
+                summary_parts.append(f"- {eval.candidate_name} (Score:  {eval.overall_score:.1f})")
             summary_parts.append("")
         
-        # 添加总体建议
+        # Add overall recommendations
         if recommended:
-            summary_parts.append("**建议：**")
-            summary_parts.append("1. 优先面试推荐候选人")
+            summary_parts.append("**Recommendations:**")
+            summary_parts.append("1. Prioritize interviews for recommended candidates")
             if consider:
-                summary_parts.append("2. 可考虑面试部分考虑候选人")
-            summary_parts.append("3. 根据面试结果最终确定人选")
+                summary_parts.append("2. Consider interviewing some candidates under consideration")
+            summary_parts.append("3. Make final decisions based on interview results")
         else:
-            summary_parts.append("**建议：**")
-            summary_parts.append("1. 当前候选人整体匹配度不高")
-            summary_parts.append("2. 建议扩大招聘范围或调整招聘要求")
-            summary_parts.append("3. 可考虑面试部分考虑候选人")
+            summary_parts.append("**Recommendations:**")
+            summary_parts.append("1. Current candidates have low overall match")
+            summary_parts.append("2. Recommend expanding recruitment scope or adjusting requirements")
+            summary_parts.append("3. Consider interviewing some candidates under consideration")
         
         summary_content = "\n".join(summary_parts)
         return RECOMMENDATION_SUMMARY_TEMPLATE.format(summary_content=summary_content)
@@ -463,10 +463,10 @@ class ReportGenerationNode:
         result = self.process(evaluations, job_requirement, scoring_dimensions)
         
         if result["status"] == "success":
-            print(f"报告生成完成: {result['candidate_count']} 个候选人")
+            print(f"Report generation completed: {result['candidate_count']} 个candidates")
             return result["report"]
         else:
-            print(f"报告生成失败: {result['error']}")
+            print(f"Report generation failed: {result['error']}")
             return ""
     
     def save_report(self, report: str, filename: str = None) -> str:
@@ -503,7 +503,7 @@ def main():
                 )
             ],
             overall_score=8.5,
-            recommendation="推荐面试",
+            recommendation="Recommended面试",
             strengths=["技术能力强", "经验丰富"],
             weaknesses=["沟通能力待提升"]
         ),
@@ -544,7 +544,7 @@ def main():
         ]
     )
     
-    # 生成报告
+    # Generate report
     node = ReportGenerationNode()
     report = node.run_standalone(evaluations, job_requirement, scoring_dimensions)
     

@@ -83,7 +83,7 @@ class ResumeStructureNode:
         if progress_callback:
             await progress_callback({
                 "stage": "resume_processing",
-                "message": "开始解析简历文件",
+                "message": "Start parsing resume files",
                 "progress": 15,
                 "total_items": len(resume_files),
                 "completed_items": 0
@@ -95,7 +95,7 @@ class ResumeStructureNode:
         if progress_callback:
             await progress_callback({
                 "stage": "resume_processing",
-                "message": "开始结构化简历内容",
+                "message": "Start structuring resume content",
                 "progress": 25,
                 "total_items": len(parsed_resumes),
                 "completed_items": 0
@@ -107,7 +107,7 @@ class ResumeStructureNode:
         if progress_callback:
             await progress_callback({
                 "stage": "resume_processing",
-                "message": "保存结构化结果",
+                "message": "Saving structured results",
                 "progress": 35,
                 "total_items": len(structured_results),
                 "completed_items": len(structured_results)
@@ -131,7 +131,7 @@ class ResumeStructureNode:
         if progress_callback:
             await progress_callback({
                 "stage": "resume_processing",
-                "message": "简历处理完成",
+                "message": "Resume processing completed",
                 "progress": 40,
                 "total_items": len(resume_files),
                 "completed_items": len(resume_files)
@@ -562,7 +562,7 @@ class ResumeStructureNode:
             if progress_callback:
                 await progress_callback({
                     "stage": "resume_processing",
-                    "message": f"解析简历文件: {os.path.basename(file_path)}",
+                    "message": f"Parsing resume file: {os.path.basename(file_path)}",
                     "progress": 15 + (i / len(resume_files)) * 10,
                     "current_item": os.path.basename(file_path),
                     "total_items": len(resume_files),
@@ -624,7 +624,7 @@ class ResumeStructureNode:
                 if progress_callback:
                     await progress_callback({
                         "stage": "resume_processing",
-                        "message": f"完成简历结构化: {os.path.basename(resume_data.get('file_path', 'unknown'))}",
+                        "message": f"Completed resume structuring: {os.path.basename(resume_data.get('file_path', 'unknown'))}",
                         "progress": 25 + (completed_count / len(parsed_resumes)) * 10,
                         "current_item": os.path.basename(resume_data.get('file_path', 'unknown')),
                         "total_items": len(parsed_resumes),

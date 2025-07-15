@@ -6,72 +6,72 @@ This file contains all prompts used by the scoring dimension node.
 """
 
 # System prompt for scoring dimension generation
-SCORING_DIMENSION_SYSTEM_PROMPT = """你是一个专业的HR评分系统设计师，负责根据招聘需求生成个性化的候选人评分维度。
+SCORING_DIMENSION_SYSTEM_PROMPT = """You are a professional HR scoring system designer responsible for generating personalized candidate scoring dimensions based on recruitment requirements.
 
-**你的任务：**
-1. 基于招聘需求，生成4-6个评分维度
-2. 为每个维度分配合理的权重（总和为1.0）
-3. 为每个维度定义具体的评分字段
-4. 确保评分维度全面、合理、可操作
+**Your Task:**
+1. Based on recruitment requirements, generate 4-6 scoring dimensions
+2. Assign reasonable weights to each dimension (total = 1.0)
+3. Define specific scoring fields for each dimension
+4. Ensure scoring dimensions are comprehensive, reasonable, and operational
 
-**评分维度设计原则：**
-1. **基础信息** (10-15%权重): 姓名、经验年限、当前职位、教育背景、所在地等
-2. **技能匹配** (30-40%权重): 根据职位要求的技术技能
-3. **经验评估** (25-35%权重): 工作经验、项目经验、行业经验
-4. **软技能** (10-20%权重): 沟通能力、领导力、团队合作
-5. **加分项** (5-15%权重): 认证、开源贡献、语言能力等
-6. **其他专业维度**: 根据具体职位需求添加
+**Scoring Dimension Design Principles:**
+1. **Basic Information** (10-15% weight): Name, years of experience, current position, educational background, location, etc.
+2. **Skill Matching** (30-40% weight): Technical skills based on job requirements
+3. **Experience Assessment** (25-35% weight): Work experience, project experience, industry experience
+4. **Soft Skills** (10-20% weight): Communication skills, leadership, teamwork
+5. **Bonus Items** (5-15% weight): Certifications, open source contributions, language skills, etc.
+6. **Other Professional Dimensions**: Add based on specific job requirements
 
-**输出格式要求：**
-输出JSON格式的评分维度配置：
+**Output Format Requirements:**
+Output scoring dimension configuration in JSON format:
 ```json
 {
     "dimensions": [
         {
-            "name": "基础信息",
+            "name": "Basic Information",
             "weight": 0.1,
-            "fields": ["姓名", "经验年限", "当前职位", "教育背景", "所在地"],
-            "description": "候选人基本信息评估"
+            "fields": ["Name", "Years of Experience", "Current Position", "Educational Background", "Location"],
+            "description": "Basic candidate information assessment"
         },
         {
-            "name": "技能匹配",
+            "name": "Skill Matching",
             "weight": 0.4,
-            "fields": ["必要技能1", "必要技能2", "必要技能3"],
-            "description": "技术技能与职位要求匹配度"
+            "fields": ["Required Skill 1", "Required Skill 2", "Required Skill 3"],
+            "description": "Technical skill matching with job requirements"
         }
     ]
 }
 ```
 
-**注意事项：**
-- 权重总和必须为1.0
-- 字段名要具体明确
-- 根据不同职位类型调整维度重点
-- 考虑must_have、nice_to_have、deal_breaker的影响"""
+**Important Notes:**
+- Total weight must equal 1.0
+- Field names must be specific and clear
+- Adjust dimension focus based on different job types
+- Consider the impact of must_have, nice_to_have, deal_breaker"""
 
 # Prompt template for scoring dimension generation
 SCORING_DIMENSION_PROMPT_TEMPLATE = """
-请基于以下招聘需求生成个性化的评分维度：
+Please generate personalized scoring dimensions based on the following recruitment requirements:
 
-**职位信息：**
-- 职位名称: {position}
-- 行业: {industry}
-- 最低经验要求: {min_years_experience}年
+**Job Information:**
+- Job Title: {position}
+- Industry: {industry}
+- Minimum Experience Requirement: {min_years_experience} years
 
-**必要条件 (must_have):**
+**Mandatory Requirements (must_have):**
 {must_have_formatted}
 
-**加分条件 (nice_to_have):**
+**Bonus Requirements (nice_to_have):**
 {nice_to_have_formatted}
 
-**排除条件 (deal_breaker):**
+**Exclusion Criteria (deal_breaker):**
 {deal_breaker_formatted}
 
-请根据这些信息生成合适的评分维度，特别注意：
-1. 必要条件应该在技能匹配维度中占主要地位
-2. 加分条件可以作为独立维度或加分项
-3. 排除条件要在评分中体现负面影响
-4. 根据职位类型调整各维度权重
+Please generate appropriate scoring dimensions based on this information, paying special attention to:
+1. Mandatory requirements should dominate in the skill matching dimension
+2. Bonus requirements can be independent dimensions or bonus items
+3. Exclusion criteria should reflect negative impact in scoring
+4. Adjust dimension weights based on job type
 
-请输出JSON格式的评分维度配置。
+Please output the scoring dimension configuration in JSON format.
 """ 
