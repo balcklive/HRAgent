@@ -12,6 +12,8 @@ from src.prompts import (
 from src.utils.resume_parser import ResumeParser
 import json
 import re
+import os
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
 class ResumeStructureNode:
@@ -20,11 +22,13 @@ class ResumeStructureNode:
     def __init__(self, 
                  model_name: str = "gpt-4o-mini", 
                  temperature: float = 0.3,
-                 max_concurrent: int = 5):
+                 max_concurrent: int = 5,
+                 save_structured_results: bool = True):
         self.llm = ChatOpenAI(model=model_name, temperature=temperature)
         self.max_concurrent = max_concurrent
         self.system_prompt = RESUME_STRUCTURE_SYSTEM_PROMPT
         self.resume_parser = ResumeParser()
+        self.save_structured_results = save_structured_results
         
     async def process(self, resume_files: List[str]) -> Dict[str, Any]:
         """处理多个简历文件"""
@@ -43,7 +47,11 @@ class ResumeStructureNode:
             print("开始结构化处理...")
             structured_results = await self._process_resumes_concurrently(valid_resumes)
             
-            # 第三步：创建CandidateProfile对象
+            # 第三步：保存结构化结果（如果启用）
+            if self.save_structured_results:
+                await self._save_structured_results_to_disk(structured_results)
+            
+            # 第四步：创建CandidateProfile对象
             candidate_profiles = []
             for result in structured_results:
                 if result["status"] == "success":
@@ -94,6 +102,208 @@ class ResumeStructureNode:
                 processed_results.append(result)
         
         return processed_results
+    
+    async def _save_structured_results_to_disk(self, structured_results: List[Dict[str, Any]]) -> None:
+        """保存结构化结果到硬盘"""
+        try:
+            # 创建保存目录
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_dir = f"structured_resumes_{timestamp}"
+            os.makedirs(save_dir, exist_ok=True)
+            
+            print(f"💾 正在保存结构化结果到目录: {save_dir}")
+            
+            # 保存每个候选人的结构化结果
+            for i, result in enumerate(structured_results):
+                if result["status"] == "success":
+                    # 从文件路径获取候选人名称
+                    file_name = result.get("file_name", f"candidate_{i+1}")
+                    candidate_name = os.path.splitext(file_name)[0]
+                    
+                    # 准备保存的数据
+                    save_data = {
+                        "file_info": {
+                            "original_file": result["file_path"],
+                            "file_name": result["file_name"],
+                            "processing_time": datetime.now().isoformat(),
+                            "validation": result.get("validation", {})
+                        },
+                        "structured_data": result["structured_data"]
+                    }
+                    
+                    # 保存为JSON文件
+                    json_file = os.path.join(save_dir, f"{candidate_name}_structured.json")
+                    with open(json_file, 'w', encoding='utf-8') as f:
+                        json.dump(save_data, f, ensure_ascii=False, indent=2)
+                    
+                    # 保存为可读的Markdown文件
+                    md_file = os.path.join(save_dir, f"{candidate_name}_structured.md")
+                    await self._save_as_markdown(save_data, md_file)
+                    
+                    # 从结构化数据中提取候选人姓名
+                    candidate_real_name = save_data["structured_data"].get("basic_info", {}).get("name", candidate_name)
+                    print(f"✅ 已保存候选人 '{candidate_real_name}' 的结构化结果")
+                    
+                elif result["status"] == "error":
+                    # 保存错误信息
+                    error_file = os.path.join(save_dir, f"error_{i+1}.json")
+                    with open(error_file, 'w', encoding='utf-8') as f:
+                        json.dump(result, f, ensure_ascii=False, indent=2)
+                    print(f"❌ 已保存错误信息: {result.get('file_path', 'unknown')}")
+            
+            # 创建汇总文件
+            summary_file = os.path.join(save_dir, "summary.json")
+            summary_data = {
+                "processing_time": datetime.now().isoformat(),
+                "total_files": len(structured_results),
+                "successful_files": len([r for r in structured_results if r["status"] == "success"]),
+                "failed_files": len([r for r in structured_results if r["status"] == "error"]),
+                "results": [
+                    {
+                        "file_name": r.get("file_name", "unknown"),
+                        "file_path": r.get("file_path", "unknown"),
+                        "status": r["status"],
+                        "candidate_name": r.get("structured_data", {}).get("basic_info", {}).get("name", "unknown") if r["status"] == "success" else None,
+                        "error": r.get("error") if r["status"] == "error" else None
+                    } for r in structured_results
+                ]
+            }
+            
+            with open(summary_file, 'w', encoding='utf-8') as f:
+                json.dump(summary_data, f, ensure_ascii=False, indent=2)
+            
+            print(f"📄 已创建汇总文件: {summary_file}")
+            print(f"📁 结构化结果已保存到目录: {save_dir}")
+            
+        except Exception as e:
+            print(f"❌ 保存结构化结果失败: {str(e)}")
+    
+    async def _save_as_markdown(self, save_data: Dict[str, Any], md_file: str) -> None:
+        """将结构化数据保存为Markdown格式"""
+        try:
+            structured_data = save_data["structured_data"]
+            file_info = save_data["file_info"]
+            
+            md_content = []
+            
+            # 标题
+            candidate_name = structured_data.get("basic_info", {}).get("name", "未知候选人")
+            md_content.append(f"# {candidate_name} - 简历结构化结果\n")
+            
+            # 文件信息
+            md_content.append("## 文件信息\n")
+            md_content.append(f"- **原始文件**: {file_info['original_file']}")
+            md_content.append(f"- **处理时间**: {file_info['processing_time']}")
+            md_content.append(f"- **验证状态**: {'✅ 通过' if file_info.get('validation', {}).get('is_valid', False) else '⚠️ 存在问题'}")
+            if not file_info.get('validation', {}).get('is_valid', False):
+                issues = file_info.get('validation', {}).get('issues', [])
+                if issues:
+                    md_content.append(f"- **问题**: {', '.join(issues)}")
+            md_content.append("")
+            
+            # 基本信息
+            basic_info = structured_data.get("basic_info", {})
+            md_content.append("## 基本信息\n")
+            md_content.append(f"- **姓名**: {basic_info.get('name', '未知')}")
+            md_content.append(f"- **邮箱**: {basic_info.get('email', '未提供')}")
+            md_content.append(f"- **电话**: {basic_info.get('phone', '未提供')}")
+            md_content.append(f"- **所在地**: {basic_info.get('location', '未提供')}")
+            md_content.append(f"- **工作经验**: {basic_info.get('experience_years', 0)} 年")
+            md_content.append(f"- **当前职位**: {basic_info.get('current_role', '未提供')}")
+            md_content.append(f"- **当前公司**: {basic_info.get('current_company', '未提供')}")
+            md_content.append("")
+            
+            # 教育背景
+            education = structured_data.get("education", [])
+            md_content.append("## 教育背景\n")
+            if education:
+                for edu in education:
+                    md_content.append(f"- **{edu.get('degree', '未知学位')}** - {edu.get('major', '未知专业')}")
+                    md_content.append(f"  - 学校: {edu.get('school', '未知')}")
+                    md_content.append(f"  - 毕业年份: {edu.get('graduation_year', '未知')}")
+                    if edu.get('gpa'):
+                        md_content.append(f"  - GPA: {edu.get('gpa')}")
+            else:
+                md_content.append("- 无教育背景信息")
+            md_content.append("")
+            
+            # 工作经历
+            work_experience = structured_data.get("work_experience", [])
+            md_content.append("## 工作经历\n")
+            if work_experience:
+                for work in work_experience:
+                    md_content.append(f"### {work.get('position', '未知职位')} - {work.get('company', '未知公司')}")
+                    md_content.append(f"- **时间**: {work.get('start_date', '未知')} 至 {work.get('end_date', '未知')}")
+                    if work.get('description'):
+                        md_content.append(f"- **描述**: {work.get('description')}")
+                    achievements = work.get('achievements', [])
+                    if achievements:
+                        md_content.append("- **主要成就**:")
+                        for achievement in achievements:
+                            md_content.append(f"  - {achievement}")
+                    md_content.append("")
+            else:
+                md_content.append("- 无工作经历信息\n")
+            
+            # 技能信息
+            skills = structured_data.get("skills", [])
+            md_content.append("## 技能信息\n")
+            if skills:
+                for skill in skills:
+                    skill_info = f"- **{skill.get('name', '未知技能')}"
+                    if skill.get('level'):
+                        skill_info += f"** ({skill.get('level')})"
+                    else:
+                        skill_info += "**"
+                    if skill.get('years_experience'):
+                        skill_info += f" - {skill.get('years_experience')} 年经验"
+                    md_content.append(skill_info)
+                    if skill.get('description'):
+                        md_content.append(f"  - {skill.get('description')}")
+            else:
+                md_content.append("- 无技能信息")
+            md_content.append("")
+            
+            # 其他信息
+            certifications = structured_data.get("certifications", [])
+            if certifications:
+                md_content.append("## 认证证书\n")
+                for cert in certifications:
+                    md_content.append(f"- {cert}")
+                md_content.append("")
+            
+            languages = structured_data.get("languages", [])
+            if languages:
+                md_content.append("## 语言能力\n")
+                for lang in languages:
+                    md_content.append(f"- {lang}")
+                md_content.append("")
+            
+            projects = structured_data.get("projects", [])
+            if projects:
+                md_content.append("## 项目经验\n")
+                for project in projects:
+                    md_content.append(f"- {project}")
+                md_content.append("")
+            
+            # 链接信息
+            links = []
+            if structured_data.get("github_url"):
+                links.append(f"- **GitHub**: {structured_data.get('github_url')}")
+            if structured_data.get("linkedin_url"):
+                links.append(f"- **LinkedIn**: {structured_data.get('linkedin_url')}")
+            
+            if links:
+                md_content.append("## 链接信息\n")
+                md_content.extend(links)
+                md_content.append("")
+            
+            # 写入文件
+            with open(md_file, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(md_content))
+                
+        except Exception as e:
+            print(f"❌ 保存Markdown文件失败: {str(e)}")
     
     async def _structure_single_resume(self, resume_data: Dict[str, Any]) -> Dict[str, Any]:
         """结构化单个简历"""
