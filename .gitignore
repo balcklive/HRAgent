@@ -153,6 +153,7 @@ Desktop.ini
 *.doc
 *.txt
 candidate_evaluation_report_*.md
+structured_resumes*
 /examples/*.pdf
 /examples/*.docx
 /examples/*.doc
