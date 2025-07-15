@@ -296,10 +296,8 @@ class ChatBot {
                     this.statusBadge.textContent = '完成';
                     this.statusBadge.className = 'badge bg-success ms-2';
                     
-                    // 跳转到结果页面
-                    setTimeout(() => {
-                        window.location.href = `/result/${taskId}`;
-                    }, 2000);
+                    // 显示报告内容
+                    this.showReport(data.result);
                     
                 } else if (data.status === 'failed') {
                     this.addBotMessage('❌ 处理失败: ' + data.error);
@@ -352,6 +350,168 @@ class ChatBot {
     disableInput() {
         this.messageInput.disabled = true;
         this.sendBtn.disabled = true;
+    }
+    
+    showReport(result) {
+        // 显示报告完成消息
+        this.addBotMessage('📊 评估报告已生成完成！以下是详细结果：');
+        
+        // 创建报告显示区域
+        const reportMessage = this.createReportMessage(result.report);
+        this.chatMessages.appendChild(reportMessage);
+        this.scrollToBottom();
+        
+        // 禁用输入，处理完成
+        this.disableInput();
+        
+        // 添加操作按钮
+        this.addActionButtons(result);
+    }
+    
+    createReportMessage(reportContent) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message bot-message';
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.innerHTML = '<i class="fas fa-chart-bar"></i>';
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        
+        const reportCard = document.createElement('div');
+        reportCard.className = 'report-card';
+        reportCard.innerHTML = `
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-file-alt"></i> 候选人评估报告
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="markdown-content" id="reportContent">
+                        ${this.convertMarkdownToHtml(reportContent)}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const time = document.createElement('div');
+        time.className = 'message-time';
+        time.textContent = new Date().toLocaleTimeString();
+        
+        messageContent.appendChild(reportCard);
+        messageContent.appendChild(time);
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(messageContent);
+        
+        return messageDiv;
+    }
+    
+    convertMarkdownToHtml(markdown) {
+        if (!markdown) return '<p>报告内容暂不可用</p>';
+        
+        // 简单的Markdown转HTML
+        let html = markdown
+            // 标题处理
+            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+            // 粗体和斜体
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            // 换行处理
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+        
+        // 处理表格
+        html = this.convertMarkdownTable(html);
+        
+        // 包装段落
+        if (!html.includes('<p>') && !html.includes('<h1>') && !html.includes('<h2>') && !html.includes('<h3>')) {
+            html = '<p>' + html + '</p>';
+        }
+        
+        return html;
+    }
+    
+    convertMarkdownTable(html) {
+        // 查找表格行
+        const tableRegex = /(\|[^|\n]*\|[^|\n]*\|[^\n]*\n)+/g;
+        
+        return html.replace(tableRegex, (match) => {
+            const rows = match.trim().split('\n');
+            if (rows.length < 2) return match;
+            
+            let tableHtml = '<table class="table table-striped table-bordered table-sm">';
+            
+            // 处理表头
+            const headerRow = rows[0];
+            const headers = headerRow.split('|').map(h => h.trim()).filter(h => h);
+            
+            tableHtml += '<thead><tr>';
+            headers.forEach(header => {
+                tableHtml += `<th>${header}</th>`;
+            });
+            tableHtml += '</tr></thead>';
+            
+            // 跳过分隔行，处理数据行
+            tableHtml += '<tbody>';
+            for (let i = 2; i < rows.length; i++) {
+                const row = rows[i];
+                if (row.trim()) {
+                    const cells = row.split('|').map(c => c.trim()).filter(c => c);
+                    tableHtml += '<tr>';
+                    cells.forEach(cell => {
+                        tableHtml += `<td>${cell}</td>`;
+                    });
+                    tableHtml += '</tr>';
+                }
+            }
+            tableHtml += '</tbody></table>';
+            
+            return tableHtml;
+        });
+    }
+    
+    addActionButtons(result) {
+        const actionMessage = document.createElement('div');
+        actionMessage.className = 'message bot-message';
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.innerHTML = '<i class="fas fa-tools"></i>';
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        
+        const actionButtons = document.createElement('div');
+        actionButtons.className = 'action-buttons';
+        actionButtons.innerHTML = `
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-primary btn-sm" onclick="window.print()">
+                    <i class="fas fa-print"></i> 打印报告
+                </button>
+                <button class="btn btn-success btn-sm" onclick="this.downloadReport()">
+                    <i class="fas fa-download"></i> 下载报告
+                </button>
+                <button class="btn btn-info btn-sm" onclick="location.reload()">
+                    <i class="fas fa-refresh"></i> 重新开始
+                </button>
+            </div>
+        `;
+        
+        const time = document.createElement('div');
+        time.className = 'message-time';
+        time.textContent = new Date().toLocaleTimeString();
+        
+        messageContent.appendChild(actionButtons);
+        messageContent.appendChild(time);
+        actionMessage.appendChild(avatar);
+        actionMessage.appendChild(messageContent);
+        
+        this.chatMessages.appendChild(actionMessage);
+        this.scrollToBottom();
     }
 }
 

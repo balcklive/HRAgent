@@ -28,6 +28,82 @@ class OptimizedHRAgentWorkflow:
         self.evaluation_node = CandidateEvaluationNode(max_concurrent=max_concurrent_evaluations)
         self.report_node = ReportGenerationNode()
         
+    async def run_web_workflow(self, job_requirement, resume_files: List[str]) -> Dict[str, Any]:
+        """运行Web版工作流（跳过交互式需求确认）"""
+        print("=== 🚀 HR智能体简历筛选系统 (Web版) ===")
+        print(f"职位: {job_requirement.position}")
+        print(f"简历文件数量: {len(resume_files)} 个")
+        
+        # 验证简历文件
+        existing_files = [f for f in resume_files if os.path.exists(f)]
+        
+        if not existing_files:
+            raise ValueError("没有有效的简历文件")
+        
+        start_time = time.time()
+        print(f"⏱️ 开始时间: {datetime.now().strftime('%H:%M:%S')}")
+        
+        try:
+            # 步骤1: 简历处理（跳过需求确认）
+            print("\n=== 📋 步骤1: 简历处理 ===")
+            candidate_profiles = await self._handle_resume_processing(existing_files)
+            
+            # 步骤2: 生成评分维度
+            print("\n=== 📊 步骤2: 生成评分维度 ===")
+            step2_start = time.time()
+            
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, self.dimension_node.process, job_requirement
+            )
+            if result["status"] != "success":
+                raise ValueError(f"评分维度生成失败: {result['error']}")
+            
+            scoring_dimensions = result["scoring_dimensions"]
+            print(f"✅ 评分维度生成成功，耗时: {time.time() - step2_start:.1f}秒")
+            
+            # 步骤3: 候选人评分
+            print("\n=== 🎯 步骤3: 候选人评分 ===")
+            step3_start = time.time()
+            
+            result = await self.evaluation_node.process(
+                candidate_profiles, job_requirement, scoring_dimensions
+            )
+            if result["status"] != "success":
+                raise ValueError(f"候选人评分失败: {result['error']}")
+            
+            evaluations = result["evaluations"]
+            print(f"✅ 候选人评分完成，耗时: {time.time() - step3_start:.1f}秒")
+            
+            # 步骤4: 生成报告
+            print("\n=== 📈 步骤4: 生成评估报告 ===")
+            step4_start = time.time()
+            
+            result = self.report_node.process(evaluations, job_requirement, scoring_dimensions)
+            if result["status"] != "success":
+                raise ValueError(f"报告生成失败: {result['error']}")
+            
+            # 保存报告
+            report = result["report"]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"candidate_evaluation_report_web_{timestamp}.md"
+            saved_file = self.report_node.save_report(report, filename)
+            
+            total_duration = time.time() - start_time
+            print(f"\n🎉 Web工作流完成！总耗时: {total_duration:.1f}秒")
+            
+            return {
+                "evaluations": evaluations,
+                "final_report": report,
+                "report_file": saved_file,
+                "job_requirement": job_requirement,
+                "scoring_dimensions": scoring_dimensions,
+                "total_duration": total_duration
+            }
+            
+        except Exception as e:
+            print(f"\n❌ Web工作流执行失败: {str(e)}")
+            raise
+
     async def run_optimized_workflow(self, jd_text: str, resume_files: List[str]) -> Dict[str, Any]:
         """运行简化优化版工作流"""
         print("=== 🚀 HR智能体简历筛选系统 (异步优化版) ===")

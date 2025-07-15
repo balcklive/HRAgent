@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
+import json
 
 from fastapi import FastAPI, File, UploadFile, Form, Request, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -19,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.workflow_optimized import HRAgentWorkflow
+from src.workflow_optimized import OptimizedHRAgentWorkflow
 from src.models import JobRequirement, WorkflowState
 from src.nodes import RequirementConfirmationNode
 from src.models import RequirementConfirmationState
@@ -44,7 +45,7 @@ app.mount("/static", StaticFiles(directory="web_interface/static"), name="static
 templates = Jinja2Templates(directory="web_interface/templates")
 
 # 工作流实例
-workflow = HRAgentWorkflow()
+workflow = OptimizedHRAgentWorkflow()
 
 # 任务状态存储
 task_status = {}
@@ -54,6 +55,38 @@ chat_sessions = {}
 
 # 需求确认节点
 requirement_node = RequirementConfirmationNode()
+
+def serialize_workflow_result(result: Dict[str, Any]) -> Dict[str, Any]:
+    """序列化工作流结果，避免JSON序列化错误"""
+    # 序列化复杂对象以避免JSON序列化错误
+    evaluations = result.get("evaluations", [])
+    if evaluations:
+        # 如果evaluations是对象列表，转换为字典列表
+        if hasattr(evaluations[0], 'model_dump'):
+            evaluations = [eval.model_dump() for eval in evaluations]
+        elif hasattr(evaluations[0], 'dict'):
+            evaluations = [eval.dict() for eval in evaluations]
+    
+    job_requirement = result.get("job_requirement", {})
+    if hasattr(job_requirement, 'model_dump'):
+        job_requirement = job_requirement.model_dump()
+    elif hasattr(job_requirement, 'dict'):
+        job_requirement = job_requirement.dict()
+    
+    scoring_dimensions = result.get("scoring_dimensions", {})
+    if hasattr(scoring_dimensions, 'model_dump'):
+        scoring_dimensions = scoring_dimensions.model_dump()
+    elif hasattr(scoring_dimensions, 'dict'):
+        scoring_dimensions = scoring_dimensions.dict()
+    
+    return {
+        "report": result.get("final_report", ""),  # 统一使用report字段
+        "report_file": result.get("report_file", ""),
+        "evaluations": evaluations,
+        "job_requirement": job_requirement,
+        "scoring_dimensions": scoring_dimensions,
+        "total_duration": result.get("total_duration", 0)
+    }
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -128,14 +161,16 @@ async def process_evaluation_task(task_id: str, jd_text: str, resume_files: List
         task_status[task_id]["progress"] = 10
         task_status[task_id]["message"] = "正在处理JD和简历文件..."
         
-        # 运行工作流
-        result = await workflow.run_workflow(jd_text, resume_files)
+        # 对于传统上传方式，使用自动需求确认
+        # 这里直接调用原始的工作流方法，让它自动提取需求
+        result = await workflow.run_optimized_workflow(jd_text, resume_files)
         
         # 更新状态
         task_status[task_id]["progress"] = 100
         task_status[task_id]["status"] = "completed"
         task_status[task_id]["message"] = "处理完成"
-        task_status[task_id]["result"] = result
+        # 使用序列化函数避免JSON序列化错误
+        task_status[task_id]["result"] = serialize_workflow_result(result)
         
         # 清理上传的文件
         try:
@@ -384,7 +419,7 @@ async def upload_chat_files(
         
         # 在后台处理任务
         asyncio.create_task(
-            process_chat_evaluation_task(task_id, session["jd_text"], saved_files)
+            process_chat_evaluation_task(task_id, session_id, saved_files)
         )
         
         return JSONResponse({
@@ -397,21 +432,34 @@ async def upload_chat_files(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-async def process_chat_evaluation_task(task_id: str, jd_text: str, resume_files: List[str]):
+async def process_chat_evaluation_task(task_id: str, session_id: str, resume_files: List[str]):
     """处理聊天中的评估任务"""
     try:
         # 更新状态
         task_status[task_id]["progress"] = 10
         task_status[task_id]["message"] = "正在处理JD和简历文件..."
         
-        # 运行工作流
-        result = await workflow.run_workflow(jd_text, resume_files)
+        # 获取已确认的JobRequirement（从指定会话中获取）
+        if session_id not in chat_sessions:
+            raise ValueError("会话不存在")
+            
+        session = chat_sessions[session_id]
+        if not session.get("job_requirement"):
+            raise ValueError("未找到已确认的招聘需求，请重新开始聊天流程")
+        
+        from src.models import JobRequirement
+        job_req_dict = session["job_requirement"]
+        job_requirement = JobRequirement(**job_req_dict)
+        
+        # 运行工作流 - 使用Web版本跳过交互式需求确认
+        result = await workflow.run_web_workflow(job_requirement, resume_files)
         
         # 更新状态
         task_status[task_id]["progress"] = 100
         task_status[task_id]["status"] = "completed"
         task_status[task_id]["message"] = "处理完成"
-        task_status[task_id]["result"] = result
+        # 使用序列化函数避免JSON序列化错误
+        task_status[task_id]["result"] = serialize_workflow_result(result)
         
         # 清理上传的文件
         try:

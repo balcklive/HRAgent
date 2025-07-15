@@ -474,6 +474,93 @@ body {
     background-color: rgba(255, 255, 255, 0.2);
 }
 
+/* 报告卡片样式 */
+.report-card {
+    max-width: 100%;
+    margin: 0.5rem 0;
+}
+
+.report-card .card {
+    border: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+
+.report-card .card-header {
+    background: linear-gradient(135deg, var(--primary-color), #0056b3);
+    border-radius: 10px 10px 0 0;
+    border: none;
+}
+
+.report-card .card-body {
+    padding: 1.5rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.report-card .markdown-content {
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.report-card .markdown-content h1,
+.report-card .markdown-content h2,
+.report-card .markdown-content h3 {
+    color: var(--dark-color);
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.report-card .markdown-content h1 {
+    font-size: 1.3rem;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 0.3rem;
+}
+
+.report-card .markdown-content h2 {
+    font-size: 1.1rem;
+    border-bottom: 1px solid var(--info-color);
+    padding-bottom: 0.2rem;
+}
+
+.report-card .markdown-content h3 {
+    font-size: 1rem;
+    color: var(--primary-color);
+}
+
+.report-card .markdown-content table {
+    width: 100%;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+}
+
+.report-card .markdown-content table th {
+    background-color: var(--light-color);
+    color: var(--dark-color);
+    font-weight: 600;
+    padding: 0.5rem;
+}
+
+.report-card .markdown-content table td {
+    padding: 0.4rem;
+    vertical-align: top;
+}
+
+.report-card .markdown-content strong {
+    color: var(--primary-color);
+}
+
+/* 操作按钮样式 */
+.action-buttons {
+    margin: 0.5rem 0;
+}
+
+.action-buttons .btn {
+    margin: 0.2rem;
+    border-radius: 15px;
+    font-size: 0.8rem;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .chat-container {
@@ -491,5 +578,19 @@ body {
     .avatar {
         width: 35px;
         height: 35px;
+    }
+    
+    .report-card .card-body {
+        padding: 1rem;
+        max-height: 300px;
+    }
+    
+    .report-card .markdown-content {
+        font-size: 0.8rem;
+    }
+    
+    .action-buttons .btn {
+        font-size: 0.7rem;
+        padding: 0.3rem 0.6rem;
     }
 }
