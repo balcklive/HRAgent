@@ -16,9 +16,100 @@ class RequirementConfirmationNode:
     """需求确认节点 - 与HR交互确认招聘需求"""
     
     def __init__(self, model_name: str = "gpt-4o-mini", temperature: float = 0.3):
-        self.llm = ChatOpenAI(model=model_name, temperature=temperature)
+        self.llm = ChatOpenAI(model=model_name, temperature=temperature, streaming=True)
         self.system_prompt = REQUIREMENT_CONFIRMATION_SYSTEM_PROMPT
         
+    async def process_stream(self, state: RequirementConfirmationState, user_input: Optional[str] = None):
+        """流式处理需求确认"""
+        try:
+            # 如果是第一次交互，基于JD生成初始问题
+            if not state.conversation_history and not user_input:
+                messages = [
+                    SystemMessage(content=self.system_prompt),
+                    HumanMessage(content=REQUIREMENT_CONFIRMATION_INITIAL_PROMPT_TEMPLATE.format(jd_text=state.jd_text))
+                ]
+                
+                full_response = ""
+                async for chunk in self.llm.astream(messages):
+                    content = chunk.content
+                    full_response += content
+                    yield {
+                        "type": "content",
+                        "content": content,
+                        "is_complete": False
+                    }
+                
+                # 更新状态
+                state.conversation_history.append(
+                    InteractionMessage(role="assistant", content=full_response)
+                )
+                
+                yield {
+                    "type": "continue",
+                    "content": "",
+                    "is_complete": False
+                }
+                return
+            
+            # 处理用户输入
+            if user_input:
+                state.conversation_history.append(
+                    InteractionMessage(role="user", content=user_input)
+                )
+            
+            # 构建消息
+            messages = self._build_messages(state, user_input)
+            
+            full_response = ""
+            async for chunk in self.llm.astream(messages):
+                content = chunk.content
+                full_response += content
+                
+                yield {
+                    "type": "content",
+                    "content": content,
+                    "is_complete": False
+                }
+            
+            # 流式完成后，进行状态更新和完成判断
+            completion_status = self._parse_completion_status(full_response)
+            
+            # 更新状态
+            state.conversation_history.append(
+                InteractionMessage(role="assistant", content=full_response)
+            )
+            
+            if completion_status.get("status") == "complete":
+                # 更新完成状态
+                state.position = completion_status["position"]
+                state.must_have = completion_status["must_have"]
+                state.nice_to_have = completion_status["nice_to_have"]
+                state.deal_breaker = completion_status["deal_breaker"]
+                state.is_complete = True
+                state.missing_info = []
+                
+                yield {
+                    "type": "complete",
+                    "content": "",
+                    "is_complete": True,
+                    "job_requirement": state.to_job_requirement().dict()
+                }
+            else:
+                # 继续收集信息
+                state.missing_info = completion_status.get("missing_info", [])
+                yield {
+                    "type": "continue",
+                    "content": "",
+                    "is_complete": False
+                }
+                
+        except Exception as e:
+            yield {
+                "type": "error",
+                "content": f"处理过程中发生错误: {str(e)}",
+                "is_complete": False
+            }
+    
     def process(self, state: RequirementConfirmationState, user_input: Optional[str] = None) -> Dict[str, Any]:
         """处理需求确认流程"""
         try:
@@ -81,8 +172,8 @@ class RequirementConfirmationNode:
         response = self.llm.invoke(messages)
         return response.content
     
-    def _generate_response(self, state: RequirementConfirmationState) -> str:
-        """生成AI响应"""
+    def _build_messages(self, state: RequirementConfirmationState, user_input: Optional[str] = None) -> List:
+        """构建消息列表"""
         messages = [SystemMessage(content=self.system_prompt)]
         
         # 添加JD信息
@@ -107,6 +198,12 @@ class RequirementConfirmationNode:
 请根据当前信息继续询问或完成确认。
 """
         messages.append(HumanMessage(content=current_info))
+        
+        return messages
+    
+    def _generate_response(self, state: RequirementConfirmationState) -> str:
+        """生成AI响应"""
+        messages = self._build_messages(state)
         
         response = self.llm.invoke(messages)
         

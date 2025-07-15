@@ -16,6 +16,9 @@ class ChatBot {
         this.currentStep = 'start';
         this.jdText = '';
         this.uploadedFiles = [];
+        this.currentEventSource = null;
+        this.currentMessageBubble = null;
+        this.streamingEnabled = true; // 流式开关
         
         this.init();
     }
@@ -80,6 +83,73 @@ class ChatBot {
         // 显示输入状态
         this.showTypingIndicator();
         
+        if (this.streamingEnabled) {
+            await this.sendMessageStream(message);
+        } else {
+            await this.sendMessageTraditional(message);
+        }
+    }
+    
+    addUserMessage(message) {
+        const messageElement = this.createMessageElement('user', message);
+        this.chatMessages.appendChild(messageElement);
+        this.scrollToBottom();
+    }
+    
+    async sendMessageStream(message) {
+        try {
+            // 准备SSE请求
+            const formData = new FormData();
+            formData.append('session_id', this.sessionId);
+            formData.append('message', message);
+            formData.append('step', this.currentStep);
+            
+            // 创建空的AI消息气泡
+            this.hideTypingIndicator();
+            this.currentMessageBubble = this.createEmptyBotMessage();
+            
+            // 建立SSE连接
+            const response = await fetch('/chat/message/stream', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error('Stream request failed');
+            }
+            
+            // 处理流式响应
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                
+                // 处理完整的SSE消息
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop(); // 保留不完整的部分
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = JSON.parse(line.slice(6));
+                        await this.handleStreamChunk(data);
+                    }
+                }
+            }
+            
+        } catch (error) {
+            console.error('Stream failed:', error);
+            this.hideTypingIndicator();
+            this.addBotMessage('❌ 抱歉，网络连接出现问题，请重试。');
+            this.enableInput();
+        }
+    }
+    
+    async sendMessageTraditional(message) {
         try {
             const formData = new FormData();
             formData.append('session_id', this.sessionId);
@@ -129,14 +199,101 @@ class ChatBot {
             console.error('发送消息失败:', error);
             this.hideTypingIndicator();
             this.addBotMessage('抱歉，网络连接出现问题，请重试。');
-            this.enableInput(); // 错误时重新启用输入
+            this.enableInput();
         }
     }
     
-    addUserMessage(message) {
-        const messageElement = this.createMessageElement('user', message);
-        this.chatMessages.appendChild(messageElement);
+    async handleStreamChunk(data) {
+        if (data.type === 'content') {
+            // 追加内容到当前消息
+            this.appendToCurrentMessage(data.content);
+            
+        } else if (data.type === 'complete') {
+            // 完成状态处理
+            this.currentStep = data.step || 'file_upload';
+            this.finalizeCurrentMessage();
+            
+            if (data.need_files) {
+                this.showFileUploadPrompt();
+            } else {
+                this.enableInput();
+            }
+            
+        } else if (data.type === 'continue') {
+            // 继续对话
+            this.currentStep = data.step || 'requirement_confirmation';
+            this.finalizeCurrentMessage();
+            this.enableInput();
+            
+        } else if (data.type === 'error') {
+            // 错误处理
+            this.finalizeCurrentMessage();
+            this.addBotMessage('❌ ' + data.content);
+            this.enableInput();
+        }
+    }
+    
+    createEmptyBotMessage() {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message bot-message';
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.innerHTML = '<i class="fas fa-robot"></i>';
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.innerHTML = '<span class="cursor">▎</span>'; // 光标效果
+        
+        const time = document.createElement('div');
+        time.className = 'message-time';
+        time.textContent = new Date().toLocaleTimeString();
+        
+        messageContent.appendChild(bubble);
+        messageContent.appendChild(time);
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(messageContent);
+        
+        this.chatMessages.appendChild(messageDiv);
         this.scrollToBottom();
+        
+        return messageDiv;
+    }
+    
+    appendToCurrentMessage(content) {
+        if (this.currentMessageBubble) {
+            const bubble = this.currentMessageBubble.querySelector('.message-bubble');
+            const cursor = bubble.querySelector('.cursor');
+            
+            if (cursor) {
+                // 在光标前插入内容
+                cursor.insertAdjacentHTML('beforebegin', content);
+            } else {
+                // 如果没有光标，直接追加
+                bubble.innerHTML += content;
+            }
+            
+            this.scrollToBottom();
+        }
+    }
+    
+    finalizeCurrentMessage() {
+        if (this.currentMessageBubble) {
+            const bubble = this.currentMessageBubble.querySelector('.message-bubble');
+            const cursor = bubble.querySelector('.cursor');
+            
+            if (cursor) {
+                cursor.remove(); // 移除光标
+            }
+            
+            // 处理Markdown格式
+            bubble.innerHTML = this.convertMarkdownToHtml(bubble.innerHTML);
+            
+            this.currentMessageBubble = null;
+        }
     }
     
     addBotMessage(message) {

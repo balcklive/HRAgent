@@ -561,6 +561,75 @@ body {
     font-size: 0.8rem;
 }
 
+/* 流式消息光标效果 */
+.message-bubble .cursor {
+    animation: blink 1s infinite;
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+/* 流式消息渐现效果 */
+.message-bubble.streaming {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 错误状态样式 */
+.message-bubble.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* 加载状态优化 */
+.typing-indicator.streaming {
+    display: none;
+}
+
+/* 流式输入光标样式优化 */
+.message-bubble .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1.2em;
+    background-color: var(--primary-color);
+    margin-left: 2px;
+    vertical-align: text-bottom;
+}
+
+/* 流式消息内容平滑过渡 */
+.message-bubble {
+    transition: all 0.1s ease-out;
+}
+
+/* 流式消息完成时的样式 */
+.message-bubble.completed {
+    animation: messageComplete 0.3s ease-in-out;
+}
+
+@keyframes messageComplete {
+    0% { 
+        transform: scale(1); 
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); 
+    }
+    50% { 
+        transform: scale(1.02); 
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); 
+    }
+    100% { 
+        transform: scale(1); 
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); 
+    }
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .chat-container {

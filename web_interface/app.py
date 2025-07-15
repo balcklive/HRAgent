@@ -12,7 +12,7 @@ from datetime import datetime
 import json
 
 from fastapi import FastAPI, File, UploadFile, Form, Request, HTTPException, BackgroundTasks
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -266,13 +266,90 @@ async def start_chat_session():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/chat/message/stream")
+async def process_chat_message_stream(
+    session_id: str = Form(...),
+    message: str = Form(...),
+    step: str = Form(...)
+):
+    """流式处理聊天消息"""
+    try:
+        if session_id not in chat_sessions:
+            raise HTTPException(status_code=404, detail="会话不存在")
+        
+        session = chat_sessions[session_id]
+        
+        # 保存用户消息
+        session["messages"].append({
+            "role": "user",
+            "content": message,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        async def generate():
+            if step == "jd_input":
+                # 创建需求确认状态
+                requirement_state = RequirementConfirmationState(jd_text=message)
+                session["requirement_state"] = requirement_state.model_dump()
+                session["jd_text"] = message
+                
+                # 流式处理
+                requirement_node = session["requirement_node"]
+                async for chunk in requirement_node.process_stream(requirement_state):
+                    # 更新session状态
+                    session["requirement_state"] = requirement_state.model_dump()
+                    
+                    # 添加步骤信息
+                    if chunk.get("type") == "continue":
+                        chunk["step"] = "requirement_confirmation"
+                    elif chunk.get("type") == "complete":
+                        chunk["step"] = "file_upload"
+                        chunk["need_files"] = True
+                    
+                    # 发送SSE数据
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                    
+            elif step == "requirement_confirmation":
+                # 继续需求确认对话
+                requirement_state_dict = session["requirement_state"]
+                requirement_state = RequirementConfirmationState(**requirement_state_dict)
+                requirement_node = session["requirement_node"]
+                
+                async for chunk in requirement_node.process_stream(requirement_state, message):
+                    # 更新session状态
+                    session["requirement_state"] = requirement_state.model_dump()
+                    
+                    # 检查是否完成
+                    if chunk.get("is_complete", False):
+                        session["job_requirement"] = chunk["job_requirement"]
+                        chunk["step"] = "file_upload"
+                        chunk["need_files"] = True
+                    else:
+                        chunk["step"] = "requirement_confirmation"
+                    
+                    yield f"data: {json.dumps(chunk)}\n\n"
+        
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Cache-Control"
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/chat/message")
 async def process_chat_message(
     session_id: str = Form(...),
     message: str = Form(...),
     step: str = Form(...)
 ):
-    """处理聊天消息"""
+    """处理聊天消息（备用）"""
     try:
         if session_id not in chat_sessions:
             raise HTTPException(status_code=404, detail="会话不存在")
