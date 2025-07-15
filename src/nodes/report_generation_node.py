@@ -1,6 +1,6 @@
 # Author: Peng Fei
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from src.models import (
     CandidateEvaluation,
     ScoringDimensions,
@@ -49,6 +49,87 @@ class ReportGenerationNode:
             }
             
         except Exception as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "report": ""
+            }
+
+    async def process_stream(self, 
+                            evaluations: List[CandidateEvaluation],
+                            job_requirement: JobRequirement,
+                            scoring_dimensions: ScoringDimensions,
+                            progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+        """处理报告生成（带进度流式输出）"""
+        try:
+            if progress_callback:
+                await progress_callback({
+                    "stage": "report_generation",
+                    "message": "开始生成候选人评估报告",
+                    "progress": 90,
+                    "total_items": 1,
+                    "completed_items": 0
+                })
+            
+            if not evaluations:
+                return {
+                    "status": "error",
+                    "error": "没有候选人评价数据",
+                    "report": ""
+                }
+            
+            if progress_callback:
+                await progress_callback({
+                    "stage": "report_generation",
+                    "message": "分析候选人数据",
+                    "progress": 92,
+                    "current_item": "数据分析"
+                })
+            
+            # 生成报告（在线程池中执行以避免阻塞）
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            if progress_callback:
+                await progress_callback({
+                    "stage": "report_generation",
+                    "message": "生成Markdown报告",
+                    "progress": 95,
+                    "current_item": "报告生成"
+                })
+            
+            report = await loop.run_in_executor(
+                None, 
+                self._generate_markdown_report, 
+                evaluations, 
+                job_requirement, 
+                scoring_dimensions
+            )
+            
+            if progress_callback:
+                await progress_callback({
+                    "stage": "report_generation",
+                    "message": "报告生成完成",
+                    "progress": 98,
+                    "current_item": "报告完成"
+                })
+            
+            return {
+                "status": "success",
+                "report": report,
+                "candidate_count": len(evaluations),
+                "generated_at": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            if progress_callback:
+                await progress_callback({
+                    "stage": "report_generation",
+                    "message": f"报告生成失败: {str(e)}",
+                    "progress": 90,
+                    "error": str(e)
+                })
+            
             return {
                 "status": "error",
                 "error": str(e),

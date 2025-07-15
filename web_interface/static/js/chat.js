@@ -208,13 +208,20 @@ class ChatBot {
             // 追加内容到当前消息
             this.appendToCurrentMessage(data.content);
             
+        } else if (data.type === 'progress') {
+            // 处理进度更新
+            this.updateProgressUI(data);
+            
         } else if (data.type === 'complete') {
             // 完成状态处理
             this.currentStep = data.step || 'file_upload';
             this.finalizeCurrentMessage();
+            this.hideProgressUI();
             
             if (data.need_files) {
                 this.showFileUploadPrompt();
+            } else if (data.result) {
+                this.showEvaluationResult(data.result);
             } else {
                 this.enableInput();
             }
@@ -228,8 +235,13 @@ class ChatBot {
         } else if (data.type === 'error') {
             // 错误处理
             this.finalizeCurrentMessage();
-            this.addBotMessage('❌ ' + data.content);
+            this.hideProgressUI();
+            this.addBotMessage('❌ ' + data.message);
             this.enableInput();
+            
+        } else if (data.type === 'heartbeat') {
+            // 心跳消息，保持连接
+            // 不需要特别处理，只是保持连接活跃
         }
     }
     
@@ -410,27 +422,52 @@ class ChatBot {
             this.uploadBtn.disabled = true;
             this.uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上传中...';
             
-            const response = await fetch('/chat/upload', {
+            this.addBotMessage(`📤 正在上传 ${files.length} 个文件...`);
+            this.hideFileUpload();
+            
+            // 使用流式上传端点
+            const response = await fetch('/chat/upload/stream', {
                 method: 'POST',
                 body: formData
             });
             
-            const data = await response.json();
+            if (!response.ok) {
+                throw new Error('Stream request failed');
+            }
             
-            if (data.status === 'success') {
-                this.addBotMessage(`✅ 成功上传了 ${data.file_count} 个文件。正在开始处理...`);
-                this.hideFileUpload();
+            this.addBotMessage(`✅ 文件上传成功，开始处理...`);
+            
+            // 处理流式响应
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
                 
-                // 开始处理
-                this.startProcessing(data.task_id);
+                buffer += decoder.decode(value, { stream: true });
                 
-            } else {
-                this.addBotMessage('❌ 文件上传失败: ' + data.error);
+                // 处理完整的SSE消息
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop(); // 保留不完整的部分
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            await this.handleStreamChunk(data);
+                        } catch (e) {
+                            console.error('Failed to parse stream data:', e);
+                        }
+                    }
+                }
             }
             
         } catch (error) {
-            console.error('上传文件失败:', error);
-            this.addBotMessage('❌ 文件上传过程中出现错误，请重试。');
+            console.error('Upload failed:', error);
+            this.hideProgressUI();
+            this.addBotMessage('❌ 文件上传失败，请重试。');
         } finally {
             this.uploadBtn.disabled = false;
             this.uploadBtn.innerHTML = '<i class="fas fa-upload"></i> 上传文件';
@@ -669,6 +706,218 @@ class ChatBot {
         
         this.chatMessages.appendChild(actionMessage);
         this.scrollToBottom();
+    }
+    
+    updateProgressUI(progressData) {
+        const { stage, message, progress, current_item, total_items, completed_items } = progressData;
+        
+        // 创建或更新进度容器
+        let progressContainer = document.getElementById('progress-container');
+        if (!progressContainer) {
+            progressContainer = this.createProgressContainer();
+        }
+        
+        // 更新进度条
+        const progressBar = progressContainer.querySelector('.progress-bar');
+        const progressText = progressContainer.querySelector('.progress-text');
+        const progressMessage = progressContainer.querySelector('.progress-message');
+        const progressDetail = progressContainer.querySelector('.progress-detail');
+        
+        // 更新进度条
+        progressBar.style.width = `${progress}%`;
+        progressBar.setAttribute('aria-valuenow', progress);
+        
+        // 更新文本
+        progressText.textContent = `${Math.round(progress)}%`;
+        progressMessage.textContent = message;
+        
+        // 更新详细信息
+        if (total_items && completed_items !== undefined) {
+            progressDetail.textContent = `${completed_items}/${total_items}`;
+            progressDetail.style.display = 'block';
+        } else if (current_item) {
+            progressDetail.textContent = current_item;
+            progressDetail.style.display = 'block';
+        } else {
+            progressDetail.style.display = 'none';
+        }
+        
+        // 更新阶段样式
+        this.updateStageIndicator(stage);
+    }
+
+    createProgressContainer() {
+        const progressContainer = document.createElement('div');
+        progressContainer.id = 'progress-container';
+        progressContainer.className = 'progress-container';
+        
+        progressContainer.innerHTML = `
+            <div class="progress-header">
+                <span class="progress-title">处理进度</span>
+                <span class="progress-text">0%</span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="progress-info">
+                <div class="progress-message">正在初始化...</div>
+                <div class="progress-detail" style="display: none;"></div>
+            </div>
+            <div class="progress-stages">
+                <div class="stage-indicator" data-stage="initialization">初始化</div>
+                <div class="stage-indicator" data-stage="resume_processing">简历处理</div>
+                <div class="stage-indicator" data-stage="dimension_generation">维度生成</div>
+                <div class="stage-indicator" data-stage="candidate_evaluation">候选人评估</div>
+                <div class="stage-indicator" data-stage="report_generation">报告生成</div>
+            </div>
+        `;
+        
+        // 插入到聊天消息区域
+        this.chatMessages.appendChild(progressContainer);
+        this.scrollToBottom();
+        
+        return progressContainer;
+    }
+
+    updateStageIndicator(currentStage) {
+        const stageIndicators = document.querySelectorAll('.stage-indicator');
+        
+        stageIndicators.forEach(indicator => {
+            const stage = indicator.getAttribute('data-stage');
+            indicator.classList.remove('active', 'completed');
+            
+            if (stage === currentStage) {
+                indicator.classList.add('active');
+            } else if (this.isStageCompleted(stage, currentStage)) {
+                indicator.classList.add('completed');
+            }
+        });
+    }
+
+    isStageCompleted(stage, currentStage) {
+        const stageOrder = [
+            'initialization',
+            'resume_processing',
+            'dimension_generation',
+            'candidate_evaluation',
+            'report_generation'
+        ];
+        
+        const stageIndex = stageOrder.indexOf(stage);
+        const currentIndex = stageOrder.indexOf(currentStage);
+        
+        return stageIndex < currentIndex;
+    }
+
+    hideProgressUI() {
+        const progressContainer = document.getElementById('progress-container');
+        if (progressContainer) {
+            progressContainer.style.display = 'none';
+        }
+    }
+
+    showEvaluationResult(result) {
+        // 隐藏进度UI
+        this.hideProgressUI();
+        
+        // 显示结果摘要
+        const resultSummary = `
+            ✅ **处理完成**
+            
+            📊 **评估结果摘要**
+            - 候选人数量: ${result.evaluations ? result.evaluations.length : 0}
+            - 生成时间: ${new Date().toLocaleString()}
+            
+            📝 以下是详细的评估报告：
+        `;
+        
+        this.addBotMessage(resultSummary);
+        
+        // 直接显示报告内容，而不是显示按钮
+        if (result.report) {
+            this.showReportContent(result.report);
+        }
+        
+        // 添加操作按钮
+        this.addDownloadButton(result);
+    }
+
+    showReportContent(reportContent) {
+        // 直接在聊天窗口中显示报告内容
+        const reportMessage = this.createReportMessage(reportContent);
+        this.chatMessages.appendChild(reportMessage);
+        this.scrollToBottom();
+    }
+
+    addDownloadButton(result) {
+        const actionMessage = document.createElement('div');
+        actionMessage.className = 'message bot-message';
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.innerHTML = '<i class="fas fa-tools"></i>';
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        
+        const actionButtons = document.createElement('div');
+        actionButtons.className = 'action-buttons';
+        
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'd-flex gap-2 flex-wrap';
+        
+        // 打印按钮
+        const printBtn = document.createElement('button');
+        printBtn.className = 'btn btn-primary btn-sm';
+        printBtn.innerHTML = '<i class="fas fa-print"></i> 打印报告';
+        printBtn.onclick = () => window.print();
+        
+        // 下载按钮
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'btn btn-success btn-sm';
+        downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载报告';
+        downloadBtn.onclick = () => this.downloadReportContent(result.report || '');
+        
+        // 重新开始按钮
+        const restartBtn = document.createElement('button');
+        restartBtn.className = 'btn btn-info btn-sm';
+        restartBtn.innerHTML = '<i class="fas fa-refresh"></i> 重新开始';
+        restartBtn.onclick = () => location.reload();
+        
+        buttonContainer.appendChild(printBtn);
+        buttonContainer.appendChild(downloadBtn);
+        buttonContainer.appendChild(restartBtn);
+        actionButtons.appendChild(buttonContainer);
+        
+        const time = document.createElement('div');
+        time.className = 'message-time';
+        time.textContent = new Date().toLocaleTimeString();
+        
+        messageContent.appendChild(actionButtons);
+        messageContent.appendChild(time);
+        actionMessage.appendChild(avatar);
+        actionMessage.appendChild(messageContent);
+        
+        this.chatMessages.appendChild(actionMessage);
+        this.scrollToBottom();
+    }
+
+    downloadReportContent(reportContent) {
+        if (!reportContent) {
+            alert('报告内容不可用');
+            return;
+        }
+        
+        // 创建下载链接
+        const blob = new Blob([reportContent], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `candidate_evaluation_report_${new Date().toISOString().slice(0, 10)}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 }
 

@@ -663,3 +663,185 @@ body {
         padding: 0.3rem 0.6rem;
     }
 }
+
+/* 进度容器 */
+.progress-container {
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin: 15px 0;
+    border-left: 4px solid var(--primary-color);
+}
+
+/* 进度头部 */
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.progress-title {
+    font-weight: 600;
+    color: var(--dark-color);
+    font-size: 1.1rem;
+}
+
+.progress-text {
+    font-weight: 700;
+    color: var(--primary-color);
+    font-size: 1.2rem;
+}
+
+/* 进度条容器 */
+.progress-bar-container {
+    background-color: #e9ecef;
+    border-radius: 50px;
+    height: 10px;
+    overflow: hidden;
+    margin-bottom: 15px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), #0056b3);
+    border-radius: 50px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+/* 进度信息 */
+.progress-info {
+    margin-bottom: 15px;
+}
+
+.progress-message {
+    font-size: 0.95rem;
+    color: var(--dark-color);
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.progress-detail {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* 阶段指示器 */
+.progress-stages {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e9ecef;
+}
+
+.stage-indicator {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #6c757d;
+    padding: 5px 8px;
+    border-radius: 15px;
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+    position: relative;
+    flex: 1;
+    margin: 0 2px;
+}
+
+.stage-indicator.active {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 600;
+    transform: scale(1.05);
+}
+
+.stage-indicator.completed {
+    background-color: var(--success-color);
+    color: white;
+    font-weight: 500;
+}
+
+.stage-indicator.completed::after {
+    content: "✓";
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: var(--success-color);
+    color: white;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    line-height: 16px;
+    text-align: center;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .progress-stages {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .stage-indicator {
+        margin: 0;
+        text-align: left;
+        padding: 8px 12px;
+    }
+}
+
+/* 动作按钮 */
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    padding: 15px;
+    justify-content: center;
+}
+
+.action-buttons .btn {
+    border-radius: 20px;
+    padding: 8px 20px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.action-buttons .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 进度动画 */
+@keyframes progressPulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.progress-bar.animating {
+    animation: progressPulse 2s infinite;
+}
+
+/* 成功完成效果 */
+.progress-container.completed {
+    border-left-color: var(--success-color);
+}
+
+.progress-container.completed .progress-bar {
+    background: linear-gradient(90deg, var(--success-color), #1e7e34);
+}
+
+/* 错误状态 */
+.progress-container.error {
+    border-left-color: var(--danger-color);
+}
+
+.progress-container.error .progress-bar {
+    background: linear-gradient(90deg, var(--danger-color), #c82333);
+}
+
+.progress-container.error .progress-message {
+    color: var(--danger-color);
+}

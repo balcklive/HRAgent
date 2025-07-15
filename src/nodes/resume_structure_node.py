@@ -1,7 +1,7 @@
 # Author: Peng Fei
 
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from src.models import CandidateProfile, CandidateBasicInfo, Education, WorkExperience, Skill
@@ -77,6 +77,74 @@ class ResumeStructureNode:
                 "error": str(e),
                 "candidate_profiles": []
             }
+
+    async def process_stream(self, resume_files: List[str], progress_callback: Optional[Callable] = None) -> List[Dict[str, Any]]:
+        """处理简历文件（带进度流式输出）"""
+        if progress_callback:
+            await progress_callback({
+                "stage": "resume_processing",
+                "message": "开始解析简历文件",
+                "progress": 15,
+                "total_items": len(resume_files),
+                "completed_items": 0
+            })
+        
+        # 解析简历文件
+        parsed_resumes = await self._parse_resumes_with_progress(resume_files, progress_callback)
+        
+        if progress_callback:
+            await progress_callback({
+                "stage": "resume_processing",
+                "message": "开始结构化简历内容",
+                "progress": 25,
+                "total_items": len(parsed_resumes),
+                "completed_items": 0
+            })
+        
+        # 结构化简历
+        structured_results = await self._process_resumes_concurrently_stream(parsed_resumes, progress_callback)
+        
+        if progress_callback:
+            await progress_callback({
+                "stage": "resume_processing",
+                "message": "保存结构化结果",
+                "progress": 35,
+                "total_items": len(structured_results),
+                "completed_items": len(structured_results)
+            })
+        
+        # 保存结果
+        if self.save_structured_results:
+            await self._save_structured_results_to_disk(structured_results)
+        
+        # 创建CandidateProfile对象
+        candidate_profiles = []
+        for result in structured_results:
+            if result["status"] == "success":
+                try:
+                    profile = self._create_candidate_profile(result["structured_data"])
+                    candidate_profiles.append(profile)
+                except Exception as e:
+                    print(f"创建候选人档案失败: {str(e)}")
+                    continue
+        
+        if progress_callback:
+            await progress_callback({
+                "stage": "resume_processing",
+                "message": "简历处理完成",
+                "progress": 40,
+                "total_items": len(resume_files),
+                "completed_items": len(resume_files)
+            })
+        
+        return {
+            "status": "success",
+            "total_files": len(resume_files),
+            "successful_parsed": len(parsed_resumes),
+            "successful_structured": len(candidate_profiles),
+            "failed_files": [r for r in parsed_resumes if r["status"] == "error"],
+            "candidate_profiles": candidate_profiles
+        }
     
     async def _process_resumes_concurrently(self, parsed_resumes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """并发处理简历结构化"""
@@ -308,8 +376,16 @@ class ResumeStructureNode:
     async def _structure_single_resume(self, resume_data: Dict[str, Any]) -> Dict[str, Any]:
         """结构化单个简历"""
         try:
+            # 检查是否有content字段
+            if "content" not in resume_data:
+                return {
+                    "status": "error",
+                    "error": "缺少简历内容",
+                    "file_path": resume_data.get("file_path", "unknown")
+                }
+            
             content = resume_data["content"]
-            file_name = resume_data["file_name"]
+            file_name = resume_data.get("file_name", "unknown")
             
             # 清理文本
             clean_content = self.resume_parser.clean_text(content)
@@ -477,6 +553,102 @@ class ResumeStructureNode:
             github_url=github_url,
             linkedin_url=linkedin_url
         )
+
+    async def _parse_resumes_with_progress(self, resume_files: List[str], progress_callback: Optional[Callable] = None) -> List[Dict[str, Any]]:
+        """解析简历文件（带进度）"""
+        parsed_resumes = []
+        
+        for i, file_path in enumerate(resume_files):
+            if progress_callback:
+                await progress_callback({
+                    "stage": "resume_processing",
+                    "message": f"解析简历文件: {os.path.basename(file_path)}",
+                    "progress": 15 + (i / len(resume_files)) * 10,
+                    "current_item": os.path.basename(file_path),
+                    "total_items": len(resume_files),
+                    "completed_items": i
+                })
+            
+            try:
+                parsed_resume = await self._parse_single_resume(file_path)
+                parsed_resumes.append(parsed_resume)
+            except Exception as e:
+                print(f"❌ 解析简历失败 {file_path}: {str(e)}")
+                parsed_resumes.append({
+                    "status": "error",
+                    "error": str(e),
+                    "file_path": file_path
+                })
+        
+        return parsed_resumes
+
+    async def _parse_single_resume(self, file_path: str) -> Dict[str, Any]:
+        """解析单个简历文件"""
+        try:
+            # 解析简历文件
+            parse_result = await self.resume_parser.parse_resume_file(file_path)
+            
+            if parse_result["status"] == "error":
+                raise ValueError(parse_result["error"])
+            
+            content = parse_result["content"]
+            
+            if not content or content.strip() == "":
+                raise ValueError("文件内容为空")
+            
+            return {
+                "status": "success",
+                "file_path": file_path,
+                "file_name": os.path.basename(file_path),
+                "content": content
+            }
+        except Exception as e:
+            print(f"❌ 解析单个简历失败 {file_path}: {str(e)}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "file_path": file_path
+            }
+
+    async def _process_resumes_concurrently_stream(self, parsed_resumes: List[Dict[str, Any]], progress_callback: Optional[Callable] = None) -> List[Dict[str, Any]]:
+        """并发处理简历结构化（带进度）"""
+        semaphore = asyncio.Semaphore(self.max_concurrent)
+        completed_count = 0
+        
+        async def process_single_resume_stream(resume_data):
+            nonlocal completed_count
+            async with semaphore:
+                result = await self._structure_single_resume(resume_data)
+                completed_count += 1
+                
+                if progress_callback:
+                    await progress_callback({
+                        "stage": "resume_processing",
+                        "message": f"完成简历结构化: {os.path.basename(resume_data.get('file_path', 'unknown'))}",
+                        "progress": 25 + (completed_count / len(parsed_resumes)) * 10,
+                        "current_item": os.path.basename(resume_data.get('file_path', 'unknown')),
+                        "total_items": len(parsed_resumes),
+                        "completed_items": completed_count
+                    })
+                
+                return result
+        
+        tasks = [process_single_resume_stream(resume) for resume in parsed_resumes]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 处理异常结果
+        processed_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                processed_results.append({
+                    "status": "error",
+                    "error": str(result),
+                    "file_path": parsed_resumes[i]["file_path"]
+                })
+            else:
+                processed_results.append(result)
+        
+        return processed_results
     
     async def run_standalone(self, resume_files: List[str]) -> List[CandidateProfile]:
         """独立运行模式"""

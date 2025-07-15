@@ -1,7 +1,7 @@
 # Author: Peng Fei
 
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from src.models import (
@@ -61,6 +61,88 @@ class CandidateEvaluationNode:
             }
             
         except Exception as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "evaluations": []
+            }
+
+    async def process_stream(self, candidates: List[CandidateProfile], 
+                            job_requirement: JobRequirement, 
+                            scoring_dimensions: ScoringDimensions,
+                            progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+        """评估候选人（带进度流式输出）"""
+        try:
+            if progress_callback:
+                await progress_callback({
+                    "stage": "candidate_evaluation",
+                    "message": "开始候选人评估",
+                    "progress": 60,
+                    "total_items": len(candidates),
+                    "completed_items": 0
+                })
+            
+            # 所有传入的候选人都应该是有效的CandidateProfile对象
+            valid_candidates = candidates
+            
+            if progress_callback:
+                await progress_callback({
+                    "stage": "candidate_evaluation",
+                    "message": f"找到 {len(valid_candidates)} 个有效候选人",
+                    "progress": 65,
+                    "total_items": len(valid_candidates),
+                    "completed_items": 0
+                })
+            
+            # 并发评估
+            evaluations = await self._evaluate_candidates_concurrently_stream(
+                valid_candidates, job_requirement, scoring_dimensions, progress_callback
+            )
+            
+            # 排序
+            evaluations = sorted(evaluations, key=lambda x: x.overall_score, reverse=True)
+            
+            # 设置排名
+            for i, evaluation in enumerate(evaluations, 1):
+                evaluation.ranking = i
+            
+            # 生成结果
+            if progress_callback:
+                await progress_callback({
+                    "stage": "candidate_evaluation",
+                    "message": "生成评估结果",
+                    "progress": 85,
+                    "total_items": len(evaluations),
+                    "completed_items": len(evaluations)
+                })
+            
+            success_count = len([e for e in evaluations if e.overall_score > 0])
+            
+            if progress_callback:
+                await progress_callback({
+                    "stage": "candidate_evaluation",
+                    "message": "候选人评估完成",
+                    "progress": 90,
+                    "total_items": len(candidates),
+                    "completed_items": len(candidates)
+                })
+            
+            return {
+                "status": "success",
+                "total_candidates": len(candidates),
+                "successful_evaluations": success_count,
+                "evaluations": evaluations
+            }
+            
+        except Exception as e:
+            if progress_callback:
+                await progress_callback({
+                    "stage": "candidate_evaluation",
+                    "message": f"评估失败: {str(e)}",
+                    "progress": 60,
+                    "error": str(e)
+                })
+            
             return {
                 "status": "error",
                 "error": str(e),
@@ -312,6 +394,66 @@ class CandidateEvaluationNode:
             strengths=evaluation_data.get("strengths", []),
             weaknesses=evaluation_data.get("weaknesses", [])
         )
+
+    async def _evaluate_candidates_concurrently_stream(self, 
+                                                      candidates: List[CandidateProfile],
+                                                      job_requirement: JobRequirement,
+                                                      scoring_dimensions: ScoringDimensions,
+                                                      progress_callback: Optional[Callable] = None) -> List[CandidateEvaluation]:
+        """并发评分候选人（带进度）"""
+        semaphore = asyncio.Semaphore(self.max_concurrent)
+        completed_count = 0
+        
+        async def evaluate_single_candidate_stream(candidate):
+            nonlocal completed_count
+            async with semaphore:
+                if progress_callback:
+                    await progress_callback({
+                        "stage": "candidate_evaluation",
+                        "message": f"评估候选人: {candidate.basic_info.name}",
+                        "progress": 65 + (completed_count / len(candidates)) * 15,
+                        "current_item": candidate.basic_info.name,
+                        "total_items": len(candidates),
+                        "completed_items": completed_count
+                    })
+                
+                result = await self._evaluate_single_candidate(candidate, job_requirement, scoring_dimensions)
+                completed_count += 1
+                
+                if progress_callback:
+                    await progress_callback({
+                        "stage": "candidate_evaluation",
+                        "message": f"完成评估: {candidate.basic_info.name} (得分: {result.overall_score:.1f})",
+                        "progress": 65 + (completed_count / len(candidates)) * 15,
+                        "current_item": candidate.basic_info.name,
+                        "total_items": len(candidates),
+                        "completed_items": completed_count
+                    })
+                
+                return result
+        
+        tasks = [evaluate_single_candidate_stream(candidate) for candidate in candidates]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 处理结果
+        evaluations = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                # 创建错误评价
+                error_evaluation = CandidateEvaluation(
+                    candidate_id=candidates[i].id,
+                    candidate_name=candidates[i].basic_info.name,
+                    dimension_scores=[],
+                    overall_score=0.0,
+                    recommendation=f"评分失败: {str(result)}",
+                    strengths=[],
+                    weaknesses=["评分过程中出现错误"]
+                )
+                evaluations.append(error_evaluation)
+            else:
+                evaluations.append(result)
+        
+        return evaluations
     
     async def run_standalone(self, 
                            candidates: List[CandidateProfile],

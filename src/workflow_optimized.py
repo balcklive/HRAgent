@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 from dotenv import load_dotenv
 
 # 加载环境变量
@@ -102,6 +102,101 @@ class OptimizedHRAgentWorkflow:
             
         except Exception as e:
             print(f"\n❌ Web工作流执行失败: {str(e)}")
+            raise
+
+    async def run_web_workflow_stream(self, job_requirement, resume_files: List[str], 
+                                     progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+        """运行Web版工作流（带进度流式输出）"""
+        if progress_callback:
+            await progress_callback({
+                "stage": "initialization",
+                "message": f"开始处理职位: {job_requirement.position}",
+                "progress": 0,
+                "total_items": len(resume_files),
+                "completed_items": 0
+            })
+        
+        # 验证简历文件
+        existing_files = [f for f in resume_files if os.path.exists(f)]
+        
+        if not existing_files:
+            raise ValueError("没有有效的简历文件")
+        
+        start_time = time.time()
+        
+        try:
+            # 步骤1: 简历处理（带进度）
+            if progress_callback:
+                await progress_callback({
+                    "stage": "resume_processing",
+                    "message": "开始处理简历文件",
+                    "progress": 10,
+                    "total_items": len(existing_files),
+                    "completed_items": 0
+                })
+            
+            candidate_profiles = await self._handle_resume_processing_stream(existing_files, progress_callback)
+            
+            # 步骤2: 生成评分维度
+            if progress_callback:
+                await progress_callback({
+                    "stage": "dimension_generation",
+                    "message": "生成评分维度",
+                    "progress": 40,
+                    "total_items": 1,
+                    "completed_items": 0
+                })
+            
+            scoring_dimensions = await self._handle_dimension_generation_stream(job_requirement, progress_callback)
+            
+            # 步骤3: 候选人评估
+            if progress_callback:
+                await progress_callback({
+                    "stage": "candidate_evaluation",
+                    "message": "开始候选人评估",
+                    "progress": 60,
+                    "total_items": len(candidate_profiles),
+                    "completed_items": 0
+                })
+            
+            evaluation_result = await self._handle_candidate_evaluation_stream(
+                candidate_profiles, job_requirement, scoring_dimensions, progress_callback
+            )
+            
+            # 步骤4: 报告生成
+            if progress_callback:
+                await progress_callback({
+                    "stage": "report_generation",
+                    "message": "生成候选人评估报告",
+                    "progress": 90,
+                    "total_items": 1,
+                    "completed_items": 0
+                })
+            
+            report_result = await self._handle_report_generation_stream(
+                evaluation_result, job_requirement, scoring_dimensions, progress_callback
+            )
+            
+            # 完成
+            if progress_callback:
+                await progress_callback({
+                    "stage": "complete",
+                    "message": "处理完成",
+                    "progress": 100,
+                    "total_items": len(resume_files),
+                    "completed_items": len(resume_files)
+                })
+            
+            return report_result
+            
+        except Exception as e:
+            if progress_callback:
+                await progress_callback({
+                    "stage": "error",
+                    "message": f"处理出错: {str(e)}",
+                    "progress": 0,
+                    "error": str(e)
+                })
             raise
 
     async def run_optimized_workflow(self, jd_text: str, resume_files: List[str]) -> Dict[str, Any]:
@@ -350,6 +445,74 @@ class OptimizedHRAgentWorkflow:
             return candidate_profiles
         else:
             raise ValueError(f"简历处理失败: {result['error']}")
+
+    async def _handle_resume_processing_stream(self, resume_files: List[str], progress_callback: Optional[Callable] = None):
+        """处理简历文件（带进度）"""
+        result = await self.resume_node.process_stream(resume_files, progress_callback)
+        
+        if result["status"] == "success":
+            return result["candidate_profiles"]
+        else:
+            raise ValueError(f"简历处理失败: {result['error']}")
+
+    async def _handle_dimension_generation_stream(self, job_requirement, progress_callback: Optional[Callable] = None):
+        """生成评分维度（带进度）"""
+        if progress_callback:
+            await progress_callback({
+                "stage": "dimension_generation",
+                "message": "分析职位要求，生成评分维度",
+                "progress": 45,
+                "current_item": "评分维度"
+            })
+        
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, self.dimension_node.process, job_requirement
+        )
+        
+        if result["status"] != "success":
+            raise ValueError(f"评分维度生成失败: {result['error']}")
+        
+        if progress_callback:
+            await progress_callback({
+                "stage": "dimension_generation",
+                "message": "评分维度生成完成",
+                "progress": 50,
+                "current_item": "评分维度"
+            })
+        
+        return result["scoring_dimensions"]
+
+    async def _handle_candidate_evaluation_stream(self, candidate_profiles, job_requirement, scoring_dimensions, progress_callback: Optional[Callable] = None):
+        """候选人评估（带进度）"""
+        result = await self.evaluation_node.process_stream(candidate_profiles, job_requirement, scoring_dimensions, progress_callback)
+        
+        if result["status"] != "success":
+            raise ValueError(f"候选人评分失败: {result['error']}")
+        
+        return result["evaluations"]
+
+    async def _handle_report_generation_stream(self, evaluation_result, job_requirement, scoring_dimensions, progress_callback: Optional[Callable] = None):
+        """报告生成（带进度）"""
+        result = await self.report_node.process_stream(evaluation_result, job_requirement, scoring_dimensions, progress_callback)
+        
+        if result["status"] != "success":
+            raise ValueError(f"报告生成失败: {result['error']}")
+        
+        # 保存报告
+        report = result["report"]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"candidate_evaluation_report_web_{timestamp}.md"
+        saved_file = self.report_node.save_report(report, filename)
+        
+        return {
+            "evaluations": evaluation_result,
+            "final_report": report,
+            "report_file": saved_file,
+            "job_requirement": job_requirement,
+            "scoring_dimensions": scoring_dimensions,
+            "candidate_count": len(evaluation_result),
+            "generated_at": datetime.now().isoformat()
+        }
 
 
 # 性能对比工具

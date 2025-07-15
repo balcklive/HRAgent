@@ -53,6 +53,9 @@ task_status = {}
 # 聊天会话存储
 chat_sessions = {}
 
+# 流式会话存储
+streaming_sessions = {}
+
 # 需求确认节点
 requirement_node = RequirementConfirmationNode()
 
@@ -505,6 +508,121 @@ async def upload_chat_files(
             "file_count": len(saved_files),
             "message": "文件上传成功，开始处理"
         })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat/upload/stream")
+async def upload_chat_files_stream(
+    session_id: str = Form(...),
+    files: List[UploadFile] = File(...)
+):
+    """处理聊天中的文件上传（流式版本）"""
+    try:
+        if session_id not in chat_sessions:
+            raise HTTPException(status_code=404, detail="会话不存在")
+        
+        session = chat_sessions[session_id]
+        
+        # 生成任务ID
+        task_id = str(uuid.uuid4())
+        
+        # 保存上传的文件
+        upload_dir = Path("web_interface/static/uploads") / task_id
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        saved_files = []
+        for file in files:
+            if file.filename:
+                file_path = upload_dir / file.filename
+                content = await file.read()
+                
+                with open(file_path, "wb") as f:
+                    f.write(content)
+                
+                saved_files.append(str(file_path))
+        
+        # 初始化流式任务状态
+        streaming_sessions[task_id] = {
+            "status": "processing",
+            "session_id": session_id,
+            "files": saved_files,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        # 创建流式响应
+        async def generate_stream():
+            try:
+                # 获取作业需求
+                job_requirement_dict = session.get("job_requirement")
+                if not job_requirement_dict:
+                    yield f"data: {json.dumps({'type': 'error', 'message': '未找到职位需求信息'})}\n\n"
+                    return
+                
+                # 将字典转换为JobRequirement对象
+                try:
+                    job_requirement = JobRequirement(**job_requirement_dict)
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'error', 'message': f'职位需求数据格式错误: {str(e)}'})}\n\n"
+                    return
+                
+                # 创建工作流实例
+                workflow = OptimizedHRAgentWorkflow()
+                
+                # 创建进度回调队列
+                progress_queue = asyncio.Queue()
+                
+                # 创建进度回调
+                async def progress_callback(progress_data):
+                    await progress_queue.put(progress_data)
+                
+                # 启动工作流任务
+                workflow_task = asyncio.create_task(
+                    workflow.run_web_workflow_stream(job_requirement, saved_files, progress_callback)
+                )
+                
+                # 处理进度更新
+                while not workflow_task.done():
+                    try:
+                        # 等待进度更新，设置超时避免阻塞
+                        progress_data = await asyncio.wait_for(progress_queue.get(), timeout=1.0)
+                        yield f"data: {json.dumps({'type': 'progress', **progress_data})}\n\n"
+                    except asyncio.TimeoutError:
+                        # 发送心跳以保持连接
+                        yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+                
+                # 处理剩余的进度更新
+                while not progress_queue.empty():
+                    progress_data = await progress_queue.get()
+                    yield f"data: {json.dumps({'type': 'progress', **progress_data})}\n\n"
+                
+                # 获取工作流结果
+                result = await workflow_task
+                
+                # 序列化结果以避免JSON序列化错误
+                serialized_result = serialize_workflow_result(result)
+                
+                # 发送完成结果
+                yield f"data: {json.dumps({'type': 'complete', 'result': serialized_result})}\n\n"
+                
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            finally:
+                # 清理流式会话
+                if task_id in streaming_sessions:
+                    del streaming_sessions[task_id]
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Cache-Control",
+                "X-Task-ID": task_id
+            }
+        )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
