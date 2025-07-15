@@ -1,0 +1,63 @@
+# Author: Peng Fei
+
+"""
+Prompts Module
+This module contains all prompts used by the HR Agent system.
+"""
+
+from .candidate_evaluation_prompts import (
+    CANDIDATE_EVALUATION_SYSTEM_PROMPT,
+    CANDIDATE_EVALUATION_PROMPT_TEMPLATE
+)
+
+from .requirement_confirmation_prompts import (
+    REQUIREMENT_CONFIRMATION_SYSTEM_PROMPT,
+    REQUIREMENT_CONFIRMATION_INITIAL_PROMPT_TEMPLATE
+)
+
+from .scoring_dimension_prompts import (
+    SCORING_DIMENSION_SYSTEM_PROMPT,
+    SCORING_DIMENSION_PROMPT_TEMPLATE
+)
+
+from .resume_structure_prompts import (
+    RESUME_STRUCTURE_SYSTEM_PROMPT,
+    RESUME_STRUCTURE_PROMPT_TEMPLATE
+)
+
+from .report_generation_prompts import (
+    REPORT_HEADER_TEMPLATE,
+    BASIC_INFO_TABLE_TEMPLATE,
+    DIMENSION_TABLE_TEMPLATE,
+    OVERALL_RANKING_TEMPLATE,
+    RECOMMENDATION_SUMMARY_TEMPLATE,
+    RECOMMENDATION_STATUS,
+    SCORE_THRESHOLDS
+)
+
+__all__ = [
+    # Candidate evaluation prompts
+    "CANDIDATE_EVALUATION_SYSTEM_PROMPT",
+    "CANDIDATE_EVALUATION_PROMPT_TEMPLATE",
+    
+    # Requirement confirmation prompts
+    "REQUIREMENT_CONFIRMATION_SYSTEM_PROMPT", 
+    "REQUIREMENT_CONFIRMATION_INITIAL_PROMPT_TEMPLATE",
+    
+    # Scoring dimension prompts
+    "SCORING_DIMENSION_SYSTEM_PROMPT",
+    "SCORING_DIMENSION_PROMPT_TEMPLATE",
+    
+    # Resume structure prompts
+    "RESUME_STRUCTURE_SYSTEM_PROMPT",
+    "RESUME_STRUCTURE_PROMPT_TEMPLATE",
+    
+    # Report generation templates
+    "REPORT_HEADER_TEMPLATE",
+    "BASIC_INFO_TABLE_TEMPLATE", 
+    "DIMENSION_TABLE_TEMPLATE",
+    "OVERALL_RANKING_TEMPLATE",
+    "RECOMMENDATION_SUMMARY_TEMPLATE",
+    "RECOMMENDATION_STATUS",
+    "SCORE_THRESHOLDS"
+] 

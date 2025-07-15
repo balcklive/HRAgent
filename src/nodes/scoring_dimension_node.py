@@ -1,65 +1,24 @@
-from typing import Dict, Any, List
+# Author: Peng Fei
+
+import asyncio
+from typing import List, Dict, Any, Optional
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
-from src.models import (
-    JobRequirement,
-    ScoringDimension,
-    ScoringDimensions
+from src.models import JobRequirement, ScoringDimensions
+from src.prompts import (
+    SCORING_DIMENSION_SYSTEM_PROMPT,
+    SCORING_DIMENSION_PROMPT_TEMPLATE
 )
 import json
 import re
 
 class ScoringDimensionNode:
-    """评分维度生成节点 - 基于招聘需求生成个性化评分维度"""
+    """评分维度生成节点 - 根据招聘需求生成个性化评分维度"""
     
     def __init__(self, model_name: str = "gpt-4o-mini", temperature: float = 0.3):
         self.llm = ChatOpenAI(model=model_name, temperature=temperature)
-        self.system_prompt = self._build_system_prompt()
+        self.system_prompt = SCORING_DIMENSION_SYSTEM_PROMPT
         
-    def _build_system_prompt(self) -> str:
-        return """你是一个专业的HR评分系统设计师，负责根据招聘需求生成个性化的候选人评分维度。
-
-**你的任务：**
-1. 基于招聘需求，生成4-6个评分维度
-2. 为每个维度分配合理的权重（总和为1.0）
-3. 为每个维度定义具体的评分字段
-4. 确保评分维度全面、合理、可操作
-
-**评分维度设计原则：**
-1. **基础信息** (10-15%权重): 姓名、经验年限、当前职位、教育背景、所在地等
-2. **技能匹配** (30-40%权重): 根据职位要求的技术技能
-3. **经验评估** (25-35%权重): 工作经验、项目经验、行业经验
-4. **软技能** (10-20%权重): 沟通能力、领导力、团队合作
-5. **加分项** (5-15%权重): 认证、开源贡献、语言能力等
-6. **其他专业维度**: 根据具体职位需求添加
-
-**输出格式要求：**
-输出JSON格式的评分维度配置：
-```json
-{
-    "dimensions": [
-        {
-            "name": "基础信息",
-            "weight": 0.1,
-            "fields": ["姓名", "经验年限", "当前职位", "教育背景", "所在地"],
-            "description": "候选人基本信息评估"
-        },
-        {
-            "name": "技能匹配",
-            "weight": 0.4,
-            "fields": ["必要技能1", "必要技能2", "必要技能3"],
-            "description": "技术技能与职位要求匹配度"
-        }
-    ]
-}
-```
-
-**注意事项：**
-- 权重总和必须为1.0
-- 字段名要具体明确
-- 根据不同职位类型调整维度重点
-- 考虑must_have、nice_to_have、deal_breaker的影响"""
-
     def process(self, job_requirement: JobRequirement) -> Dict[str, Any]:
         """处理评分维度生成"""
         try:
@@ -98,31 +57,18 @@ class ScoringDimensionNode:
     
     def _build_prompt(self, job_requirement: JobRequirement) -> str:
         """构建生成评分维度的提示"""
-        return f"""
-请基于以下招聘需求生成个性化的评分维度：
-
-**职位信息：**
-- 职位名称: {job_requirement.position}
-- 行业: {job_requirement.industry or '未指定'}
-- 最低经验要求: {job_requirement.min_years_experience or '未指定'}年
-
-**必要条件 (must_have):**
-{self._format_requirements(job_requirement.must_have)}
-
-**加分条件 (nice_to_have):**
-{self._format_requirements(job_requirement.nice_to_have)}
-
-**排除条件 (deal_breaker):**
-{self._format_requirements(job_requirement.deal_breaker)}
-
-请根据这些信息生成合适的评分维度，特别注意：
-1. 必要条件应该在技能匹配维度中占主要地位
-2. 加分条件可以作为独立维度或加分项
-3. 排除条件要在评分中体现负面影响
-4. 根据职位类型调整各维度权重
-
-请输出JSON格式的评分维度配置。
-"""
+        must_have_formatted = self._format_requirements(job_requirement.must_have)
+        nice_to_have_formatted = self._format_requirements(job_requirement.nice_to_have)
+        deal_breaker_formatted = self._format_requirements(job_requirement.deal_breaker)
+        
+        return SCORING_DIMENSION_PROMPT_TEMPLATE.format(
+            position=job_requirement.position,
+            industry=job_requirement.industry or '未指定',
+            min_years_experience=job_requirement.min_years_experience or '未指定',
+            must_have_formatted=must_have_formatted,
+            nice_to_have_formatted=nice_to_have_formatted,
+            deal_breaker_formatted=deal_breaker_formatted
+        )
     
     def _format_requirements(self, requirements: List[str]) -> str:
         """格式化需求列表"""
@@ -217,50 +163,44 @@ class ScoringDimensionNode:
     
     def run_standalone(self, job_requirement: JobRequirement) -> ScoringDimensions:
         """独立运行模式"""
-        print("=== 评分维度生成 ===")
-        print(f"职位: {job_requirement.position}")
-        print(f"必要条件: {job_requirement.must_have}")
-        print(f"加分条件: {job_requirement.nice_to_have}")
-        print(f"排除条件: {job_requirement.deal_breaker}\n")
-        
         result = self.process(job_requirement)
         
         if result["status"] == "success":
             scoring_dimensions = result["scoring_dimensions"]
-            print("生成的评分维度:")
-            for dim in scoring_dimensions.dimensions:
-                print(f"- {dim.name} (权重: {dim.weight:.1%})")
-                print(f"  字段: {', '.join(dim.fields)}")
-                print(f"  描述: {dim.description}\n")
+            print("=== 评分维度生成完成 ===")
+            print(f"职位: {job_requirement.position}")
+            print(f"维度数量: {len(scoring_dimensions.dimensions)}")
+            
+            for i, dimension in enumerate(scoring_dimensions.dimensions, 1):
+                print(f"{i}. {dimension.name} ({dimension.weight:.0%}权重)")
+                print(f"   字段: {', '.join(dimension.fields)}")
+                print(f"   描述: {dimension.description}")
+                print()
             
             return scoring_dimensions
         else:
             print(f"生成失败: {result['error']}")
             return result["scoring_dimensions"]
 
-
-# 使用示例
-if __name__ == "__main__":
+def main():
+    """测试函数"""
+    from src.models import JobRequirement
+    
     # 示例招聘需求
     job_requirement = JobRequirement(
-        position="高级后端开发工程师",
-        must_have=[
-            "5年以上Node.js开发经验",
-            "熟练使用PostgreSQL",
-            "微服务架构经验",
-            "AWS云平台使用经验"
-        ],
-        nice_to_have=[
-            "金融科技行业背景",
-            "团队管理经验",
-            "高并发系统设计经验"
-        ],
-        deal_breaker=[
-            "少于3年开发经验",
-            "无数据库使用经验"
-        ]
+        position="高级Python开发工程师",
+        industry="互联网",
+        min_years_experience=5,
+        must_have=["Python", "Django", "PostgreSQL", "5年以上经验"],
+        nice_to_have=["Redis", "Docker", "微服务架构", "AWS"],
+        deal_breaker=["无编程经验", "少于3年经验"]
     )
     
     node = ScoringDimensionNode()
     scoring_dimensions = node.run_standalone(job_requirement)
-    print(f"权重验证: {scoring_dimensions.validate_weights()}")
+    
+    if scoring_dimensions:
+        print("评分维度生成成功！")
+
+if __name__ == "__main__":
+    main()
